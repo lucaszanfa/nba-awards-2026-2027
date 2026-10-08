@@ -1,7 +1,7 @@
 # Hospedagem e manutenção
 
-Site: GitHub Pages, repositório `lucaszanfa/nba-awards-2026-2027`.
-API: Cloudflare Worker `nba-awards-bolao`.
+Site: https://lucaszanfa.github.io/nba-awards-2026-2027/ (GitHub Pages).
+API: https://nba-awards-bolao.lucaszanfa.workers.dev (Cloudflare Worker).
 Banco: Cloudflare D1 `nba-awards-bolao`, binding `DB`.
 
 ## Acesso e uso
