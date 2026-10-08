@@ -1,0 +1,17 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "nba-awards-bolao",
+	"main": "worker/index.mjs",
+	"compatibility_date": "2026-10-08",
+	"vars": {
+		"ALLOWED_ORIGIN": "https://lucaszanfa.github.io"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "nba-awards-bolao",
+			"database_id": "315463a8-4cfb-40bf-9a9c-0666083a3b9b",
+			"migrations_dir": "migrations"
+		}
+	]
+}

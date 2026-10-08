@@ -1,0 +1,13 @@
+.sites-runtime/
+node_modules/
+*.zip
+.npm-cache/
+.wrangler/
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+wrangler.local.jsonc
+*.log
+playwright-report/
+test-results/
