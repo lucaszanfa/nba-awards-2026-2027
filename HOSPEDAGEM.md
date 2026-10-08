@@ -6,14 +6,14 @@ Banco: Cloudflare D1 `nba-awards-bolao`, binding `DB`.
 
 ## Acesso e uso
 
-1. Abra o site e entre com o valor de `ADMIN_KEY` do arquivo **local** `.dev.vars`, marcando **Sou o organizador**.
-2. Na aba **Bolão**, crie um convite por participante. Copie o código exibido e envie em particular junto com o endereço do site. Não compartilhe o código do organizador.
-3. Cada pessoa entra com seu código, escolhe os 18 nomes e clica em **Enviar palpites**. Até esse clique, as alterações são somente rascunhos.
-4. Use **Atualizar dados** para consultar os envios recentes. Na aba **Pontuação**, configure as regras; em **Resultados**, registre o top 3. Clique em **Publicar regras e resultados** para compartilhar.
-5. Clique em **Encerrar envios** para bloquear novas alterações de todos. O bloqueio é validado no servidor. **Reabrir envios** permite editar novamente.
-6. Use **Exportar todos os palpites** para guardar uma cópia dos participantes, palpites, regras e resultados. O backup do organizador é diferente do backup individual.
+1. Compartilhe o endereço do site. Os participantes informam o nome, escolhem os 18 nomes e clicam em **Enviar palpites**, sem código. Até o envio, as escolhas ficam somente na memória da página.
+2. O ranking mostra quem enviou e a pontuação parcial. Após enviar, a mesma pessoa pode alterar e reenviar no mesmo navegador, até o prazo.
+3. Para administrar, clique em **Acesso admin** e use o valor de `ADMIN_KEY` do arquivo **local** `.dev.vars`. Não compartilhe esse código.
+4. As abas **Pontuação** e **Resultados** aparecem somente para o administrador. Configure e clique em **Publicar regras e resultados**.
+5. O contador encerra automaticamente os envios em **20/10/2026 às 14h (Brasília)**. O bloqueio é conferido também no servidor. Após esse horário, todos podem abrir os palpites enviados pelo ranking, sem login.
+6. O admin pode encerrar antecipadamente ou reabrir antes do prazo; isso não revela palpites antes da data nem permite enviar após a data.
 
-O painel mostra pontuação parcial enquanto os resultados estiverem incompletos. Convites são exibidos somente na sessão em que são criados e não podem ser recuperados do hash no banco. Guarde cada código em local privado. Não existe recuperação automática por e-mail.
+O ranking mostra pontuação parcial enquanto os resultados estiverem incompletos. Os participantes não precisam de convite. Nomes repetidos são recusados para evitar sobrescrever a inscrição de outra pessoa. Não há login por e-mail ou recuperação em outro dispositivo pelo nome. Palpites anteriores à mudança continuam no banco e os acessos antigos ainda funcionam internamente.
 
 ## Atualizar o site
 
@@ -40,7 +40,7 @@ npm run deploy:api
 npm test
 ```
 
-Os testes usam SQLite em memória e verificam autenticação, isolamento de dados, encerramento dos envios, conflitos de versão, validações, CORS e pontuação. O teste `node tests/browser.mjs` exige Chrome no caminho indicado no teste, prévia em `127.0.0.1:8080` e API **local** de testes em `127.0.0.1:8787`, usando o código fictício definido no teste. Nunca execute o teste do navegador contra a API de produção.
+Os testes usam SQLite em memória e verificam autenticação, isolamento de dados, encerramento dos envios, conflitos de versão, validações, CORS, envio pelo nome, ranking e revelação após o prazo. `node tests/browser.mjs` exige Chrome no caminho indicado no teste e inicia seu próprio servidor e banco descartável, sem dados de produção. Verifica o preenchimento pelo nome, envio explícito, admin, timer, bloqueio e revelação.
 
 A versão sem URL configurada em `dist/config.js` funciona como prévia local e informa que os palpites não são enviados.
 

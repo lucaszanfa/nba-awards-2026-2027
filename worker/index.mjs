@@ -34,10 +34,14 @@ function revision(value) {
   if (!Number.isSafeInteger(value) || value < 0) throw new HTTPError(400, 'Versão inválida.');
   return value;
 }
-async function settings(db) {
+const DEFAULT_DEADLINE = '2026-10-20T17:00:00.000Z';
+export const normalizeName = value => value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
+async function settings(db, env = {}) {
   const row = await db.prepare('SELECT * FROM settings WHERE id = 1').first();
   if (!row) throw new HTTPError(503, 'Banco ainda não configurado.');
-  return { results: JSON.parse(row.results), points: JSON.parse(row.points), closed: Boolean(row.closed), revision: row.revision };
+  const deadline = env.DEADLINE || DEFAULT_DEADLINE;
+  const now = Date.now(), expired = now >= Date.parse(deadline);
+  return { results: JSON.parse(row.results), points: JSON.parse(row.points), closed: Boolean(row.closed) || expired, manuallyClosed: Boolean(row.closed), expired, deadline, serverNow: new Date(now).toISOString(), revision: row.revision };
 }
 async function auth(request, env, admin = false) {
   const token = request.headers.get('authorization')?.match(/^Bearer (\S+)$/)?.[1];
@@ -57,9 +61,41 @@ async function route(request, env) {
     await settings(env.DB);
     return { ok: true };
   }
+  if (path === '/public' && method === 'GET') {
+    const config = await settings(env.DB, env);
+    const { results: rows } = await env.DB.prepare('SELECT id, name, picks, updated_at FROM participants WHERE picks IS NOT NULL').all();
+    const participants = rows.map(row => {
+      const picks = JSON.parse(row.picks);
+      return { id: row.id, name: row.name, score: score(picks, config.results, config.points), updatedAt: row.updated_at, ...(config.expired ? { picks } : {}) };
+    }).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'pt-BR'));
+    return { settings: config, participants };
+  }
+  if (path === '/entries' && method === 'POST') {
+    const config = await settings(env.DB, env);
+    if (config.closed) throw new HTTPError(423, 'O prazo para enviar palpites está encerrado.');
+    const input = await body(request);
+    const name = typeof input.name === 'string' ? input.name.trim().replace(/\s+/g, ' ') : '';
+    if (!name || name.length > 60 || /[\u0000-\u001f]/.test(name)) throw new HTTPError(400, 'Informe seu nome, com até 60 caracteres.');
+    let picks;
+    try { picks = validatePicks(input.picks, true); } catch (e) { throw new HTTPError(400, e.message); }
+    const nameKey = normalizeName(name);
+    const { results: existing } = await env.DB.prepare('SELECT name FROM participants').all();
+    if (existing.some(row => normalizeName(row.name) === nameKey)) throw new HTTPError(409, 'Este nome já está no bolão. Use seu nome completo para diferenciar os participantes.');
+    const token = [...crypto.getRandomValues(new Uint8Array(32))].map(v => v.toString(16).padStart(2, '0')).join('');
+    const id = crypto.randomUUID();
+    const inserted = await env.DB.prepare(`INSERT OR IGNORE INTO participants (id, name, name_key, token_hash, picks, revision, updated_at)
+      SELECT ?, ?, ?, ?, ?, 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE (SELECT closed FROM settings WHERE id = 1) = 0 AND unixepoch('now') < unixepoch(?)
+      RETURNING revision, updated_at`).bind(id, name, nameKey, await hash(token), JSON.stringify(picks), config.deadline).first();
+    if (!inserted) {
+      if ((await settings(env.DB, env)).closed) throw new HTTPError(423, 'O prazo para enviar palpites está encerrado.');
+      throw new HTTPError(409, 'Este nome já está no bolão.');
+    }
+    return { token, participant: { id, name, picks, revision: inserted.revision, updatedAt: inserted.updated_at }, settings: config };
+  }
   if (path === '/me' && method === 'GET') {
     const user = await auth(request, env);
-    return { participant: { id: user.id, name: user.name, picks: user.picks ? JSON.parse(user.picks) : null, revision: user.revision, updatedAt: user.updated_at }, settings: await settings(env.DB) };
+    return { participant: { id: user.id, name: user.name, picks: user.picks ? JSON.parse(user.picks) : null, revision: user.revision, updatedAt: user.updated_at }, settings: await settings(env.DB, env) };
   }
   if (path === '/picks' && method === 'PUT') {
     const user = await auth(request, env), input = await body(request);
@@ -67,9 +103,10 @@ async function route(request, env) {
     try { picks = validatePicks(input.picks, true); } catch (e) { throw new HTTPError(400, e.message); }
     const changed = await env.DB.prepare(`UPDATE participants SET picks = ?, revision = revision + 1,
       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND revision = ?
-      AND (SELECT closed FROM settings WHERE id = 1) = 0 RETURNING revision, updated_at`).bind(JSON.stringify(picks), user.id, revision(input.revision)).first();
+      AND (SELECT closed FROM settings WHERE id = 1) = 0 AND unixepoch('now') < unixepoch(?)
+      RETURNING revision, updated_at`).bind(JSON.stringify(picks), user.id, revision(input.revision), env.DEADLINE || DEFAULT_DEADLINE).first();
     if (!changed) {
-      if ((await settings(env.DB)).closed) throw new HTTPError(423, 'Os envios do bolão estão encerrados.');
+      if ((await settings(env.DB, env)).closed) throw new HTTPError(423, 'Os envios do bolão estão encerrados.');
       throw new HTTPError(409, 'Seu palpite mudou em outro dispositivo. Atualize antes de enviar novamente.');
     }
     return { revision: changed.revision, updatedAt: changed.updated_at };
@@ -93,10 +130,10 @@ async function route(request, env) {
       const changed = await env.DB.prepare('UPDATE settings SET results = ?, points = ?, closed = ?, revision = revision + 1 WHERE id = 1 AND revision = ?')
         .bind(JSON.stringify(results), JSON.stringify(points), Number(input.closed), revision(input.revision)).run();
       if (!changed.meta.changes) throw new HTTPError(409, 'As regras mudaram em outra sessão. Atualize antes de salvar.');
-      return { settings: await settings(env.DB) };
+      return { settings: await settings(env.DB, env) };
     }
     if (path === '/admin/dashboard' && method === 'GET') {
-      const config = await settings(env.DB);
+      const config = await settings(env.DB, env);
       const { results } = await env.DB.prepare('SELECT id, name, picks, updated_at FROM participants ORDER BY name').all();
       const participants = results.map(row => {
         const picks = row.picks ? JSON.parse(row.picks) : null;

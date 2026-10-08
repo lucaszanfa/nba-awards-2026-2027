@@ -4,7 +4,8 @@
 	"main": "worker/index.mjs",
 	"compatibility_date": "2026-10-08",
 	"vars": {
-		"ALLOWED_ORIGIN": "https://lucaszanfa.github.io"
+		"ALLOWED_ORIGIN": "https://lucaszanfa.github.io",
+		"DEADLINE": "2026-10-20T17:00:00.000Z"
 	},
 	"d1_databases": [
 		{

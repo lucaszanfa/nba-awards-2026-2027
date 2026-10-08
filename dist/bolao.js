@@ -1,202 +1,88 @@
 'use strict';
 (() => {
   const apiUrl = (window.BOLAO_CONFIG?.apiUrl || '').replace(/\/$/, '');
-  let session = null, config = null, participants = [], dirty = false, busy = false, invitation = null;
-  const originalRender = render, originalSave = save;
-  const panel = document.createElement('section');
-  panel.id = 'bolao-panel'; panel.className = 'bolao-panel';
-  panel.setAttribute('aria-label', 'Bolão compartilhado');
-  $('header').after(panel);
-  $('.sidebar-bottom small').textContent = 'Envie seus palpites para participar do bolão.';
-  const nav = document.createElement('button');
-  nav.dataset.view = 'bolao'; nav.innerHTML = '♜ <span>Bolão</span>';
-  $('nav').append(nav);
-  const stamp = value => value ? new Date(value).toLocaleString('pt-BR') : 'Ainda não enviado';
-  const blankPicks = () => defaults().picks;
-
-  async function request(path, method = 'GET', payload) {
-    if (!apiUrl) throw new Error('O bolão ainda não foi publicado.');
-    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
-    try {
-      const response = await fetch(apiUrl + path, {
-        method, signal: controller.signal, cache: 'no-store',
-        headers: { Authorization: `Bearer ${session.token}`, ...(payload ? { 'Content-Type': 'application/json' } : {}) },
-        ...(payload ? { body: JSON.stringify(payload) } : {})
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Não foi possível acessar o bolão.');
-      return result;
-    } catch (e) {
-      if (e.name === 'AbortError') throw new Error('O serviço demorou a responder. Seu rascunho continua neste navegador.');
-      if (e instanceof TypeError) throw new Error('Sem conexão com o bolão. Seu rascunho continua neste navegador.');
-      throw e;
-    } finally { clearTimeout(timer); }
+  let session=null, config=null, participants=[], dirty=false, busy=false, adminLogin=false, name='', offset=0, expiredFetched=false, loading=true;
+  const originalRender=render;
+  const panel=document.createElement('section'); panel.id='bolao-panel'; panel.className='bolao-panel'; panel.setAttribute('aria-label','Participar do bolão'); $('header').after(panel);
+  $('.sidebar-bottom small').textContent='Preencha seu nome e clique em Enviar palpites.';
+  const nav=document.createElement('button'); nav.dataset.view='bolao'; nav.innerHTML='♜ <span>Ranking</span>'; $('nav').append(nav);
+  const stamp=v=>v?new Date(v).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}):'Ainda não enviado';
+  const timeLeft=()=>Math.max(0,Date.parse(config?.deadline||'2026-10-20T17:00:00Z')-(Date.now()+offset));
+  const closed=()=>loading||!config||config.closed||timeLeft()===0;
+  function applySettings(next){config=next;offset=Date.parse(next.serverNow)-Date.now();state.results=structuredClone(next.results);state.points=structuredClone(next.points);}
+  async function request(path,method='GET',payload){
+    if(!apiUrl)throw Error('O bolão ainda não foi publicado.');
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
+    try{
+      const response=await fetch(apiUrl+path,{method,signal:controller.signal,cache:'no-store',headers:{...(session?.token?{Authorization:`Bearer ${session.token}`} : {}),...(payload?{'Content-Type':'application/json'}:{})},...(payload?{body:JSON.stringify(payload)}:{})});
+      const data=await response.json();if(!response.ok)throw Error(data.error||'Não foi possível acessar o bolão.');return data;
+    }catch(e){if(e.name==='AbortError'||e instanceof TypeError)throw Error('Não foi possível conectar ao bolão. Tente novamente; suas escolhas ainda não foram enviadas.');throw e;}finally{clearTimeout(timer);}
   }
-  function remember() {
-    // O código do organizador fica apenas na memória da página.
-    try {
-      if (session && !session.admin) sessionStorage.setItem('nba-bolao-session', JSON.stringify({ token: session.token }));
-      else sessionStorage.removeItem('nba-bolao-session');
-    } catch { /* A sessão ainda funciona quando o armazenamento está bloqueado. */ }
-  }
-  function cacheState() {
-    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* Exportar backup continua disponível. */ }
-  }
-  function applySettings(next) {
-    config = next;
-    state.results = structuredClone(next.results);
-    state.points = structuredClone(next.points);
-  }
-  async function load(restoreDraft = false) {
-    if (session.admin) {
-      const data = await request('/admin/dashboard');
-      participants = data.participants;
-      KEY = 'nba-awards-bolao-admin'; state = defaults(); applySettings(data.settings);
-    } else {
-      const data = await request('/me');
-      session.participant = data.participant;
-      KEY = 'nba-awards-bolao-' + data.participant.id;
-      state = defaults(); state.picks = data.participant.picks || blankPicks();
-      applySettings(data.settings);
-      if (restoreDraft && !config.closed) {
-        try {
-          const draft = localStorage.getItem(KEY);
-          if (draft) {
-            const cached = validate(JSON.parse(draft));
-            if (JSON.stringify(cached.picks) !== JSON.stringify(state.picks)) {
-              if (confirm('Há um rascunho diferente neste navegador. Deseja recuperá-lo? Ele só será enviado ao clicar em Enviar palpites.')) {
-                state.picks = cached.picks; dirty = true;
-              }
-            }
-          }
-        } catch { toast('Não foi possível recuperar o rascunho local.'); }
-      }
+  function remember(){try{if(session&&!session.admin)localStorage.setItem('nba-bolao-entry',JSON.stringify({token:session.token}));}catch{}}
+  async function load(preserve=false){
+    if(session?.admin){const data=await request('/admin/dashboard');participants=data.participants;applySettings(data.settings);}
+    else{
+      const data=await request('/public');participants=data.participants;applySettings(data.settings);
+      if(session?.token&&!preserve){const own=await request('/me');session.participant=own.participant;state.picks=own.participant.picks||defaults().picks;name=own.participant.name;applySettings(own.settings);}
     }
-    cacheState(); render();
+    loading=false;
   }
-  function controls() {
-    panel.innerHTML = !apiUrl ? '<strong>Bolão em preparação</strong><p>Esta é uma prévia local. Os palpites ainda não são enviados ao organizador.</p>' : !session ? `
-      <strong>Entre no bolão</strong><p>Use o código individual recebido do organizador. Guarde seu código para acessar em outro dispositivo.</p>
-      <form id="bolao-login" class="bolao-form"><label>Código de acesso<input name="code" type="password" autocomplete="off" required maxlength="256"></label>
-      <label class="bolao-check"><input name="admin" type="checkbox"> Sou o organizador</label><button ${busy ? 'disabled' : ''}>${busy ? 'Entrando…' : 'Entrar'}</button></form>` : `
-      <strong>${session.admin ? 'Painel do organizador' : 'Olá, ' + esc(session.participant?.name || '')}</strong>
-      <p>${config?.closed ? 'Envios encerrados.' : 'Envios abertos.'} ${session.admin ? 'Regras e resultados são compartilhados com todos.' : 'Último envio: ' + esc(stamp(session.participant?.updatedAt)) + '. Alterações ficam como rascunho até você enviar.'}</p>
-      <div class="bolao-actions">${session.admin ? '<button data-bolao="settings">Publicar regras e resultados</button><button data-bolao="toggle">' + (config?.closed ? 'Reabrir envios' : 'Encerrar envios') + '</button>' : '<button data-bolao="submit" ' + (config?.closed ? 'disabled' : '') + '>Enviar palpites</button>'}
-      <button data-bolao="refresh">Atualizar dados</button><button data-bolao="logout">Sair</button></div>`;
-    panel.querySelectorAll('button').forEach(button => { if (busy) button.disabled = true; });
-    if (apiUrl) {
-      const restricted = !session || busy;
-      document.querySelectorAll('[data-pick], [data-clear], [data-points]').forEach(element => {
-        const field = element.dataset.field;
-        element.disabled = restricted || (session?.admin ? field === 'picks' : element.matches('[data-points]') || field === 'results' || config?.closed);
-      });
-    }
-    if (session) $('#save-state').textContent = busy ? 'Acessando bolão…' : dirty ? 'Rascunho — ainda não publicado' : session.admin ? 'Regras carregadas do bolão' : 'Dados carregados do bolão';
+  function table(){
+    const rows=participants.filter(p=>p.picks||p.updatedAt);let rank=0,previous=null;
+    return '<div class="table-wrap"><table><thead><tr><th>POSIÇÃO</th><th>NOME</th><th>PONTOS</th><th>ENVIADO EM</th><th>PALPITES</th></tr></thead><tbody>'+rows.map((p,i)=>{
+      if(p.score!==previous)rank=i+1;previous=p.score;
+      const detail=p.picks?'<details><summary>Ver palpites</summary>'+AWARDS.map(([id,code])=>'<p><b>'+code+'</b>: '+p.picks[id].map((v,n)=>(n+1)+'º '+esc(lookup.get(v)?.name||'—')).join(' · ')+'</p>').join('')+'</details>':'Disponíveis após o prazo';
+      return '<tr><td>'+rank+'º</td><td>'+esc(p.name)+'</td><td>'+p.score+'</td><td>'+esc(stamp(p.updatedAt))+'</td><td>'+detail+'</td></tr>';
+    }).join('')+(rows.length?'':'<tr><td colspan="5">Ninguém enviou palpites ainda.</td></tr>')+'</tbody></table></div>';
   }
-  function dashboard() {
-    if (!session?.admin) return heading('Bolão da temporada.', 'Entre com seu convite para enviar os palpites. O organizador acompanha todos pelo painel.') + '<div class="notice">Seus resultados e a pontuação seguem as regras compartilhadas do bolão.</div>';
-    return heading('Todos os palpites.', 'Crie um convite para cada participante e acompanhe os envios e a pontuação.') + `
-      <form id="bolao-invite" class="bolao-form card"><label>Nome do participante<input name="name" required maxlength="60" placeholder="Nome do seu amigo"></label><button ${busy ? 'disabled' : ''}>Criar convite</button></form>
-      ${invitation ? '<div class="notice"><strong>Convite para ' + esc(invitation.name) + '</strong><p>Copie e envie este código em particular. Ele dá acesso aos palpites dessa pessoa e será exibido somente nesta sessão.</p><textarea readonly aria-label="Código do convite">' + esc(invitation.token) + '</textarea><button data-bolao="copy">Copiar código</button></div>' : ''}
-      <div class="table-wrap"><table><thead><tr><th>PARTICIPANTE</th><th>PONTOS</th><th>ÚLTIMO ENVIO</th><th>PALPITES</th></tr></thead><tbody>${participants.map(p => '<tr><td>' + esc(p.name) + '</td><td>' + p.score + '</td><td>' + esc(stamp(p.updatedAt)) + '</td><td>' + (p.picks ? '<details><summary>Ver 18 escolhas</summary>' + AWARDS.map(([id, code]) => '<p><b>' + code + '</b>: ' + p.picks[id].map((v, i) => (i + 1) + 'º ' + esc(lookup.get(v)?.name || '—')).join(' · ') + '</p>').join('') + '</details>' : 'Aguardando envio') + '</td></tr>').join('') || '<tr><td colspan="4">Nenhum participante cadastrado.</td></tr>'}</tbody></table></div>
-      <button data-bolao="export-all">Exportar todos os palpites</button>`;
+  function tick(){const node=$('#bolao-timer');if(!node)return;const s=Math.ceil(timeLeft()/1000);node.textContent=s?`${Math.floor(s/86400)}d ${String(Math.floor(s%86400/3600)).padStart(2,'0')}h ${String(Math.floor(s%3600/60)).padStart(2,'0')}m ${String(s%60).padStart(2,'0')}s`:'Prazo encerrado';}
+  function controls(){
+    document.querySelectorAll('[data-view=resultados],[data-view=pontuacao]').forEach(b=>b.hidden=!session?.admin);
+    panel.innerHTML='<div class="bolao-deadline"><strong>Envios até 20/10/2026, às 14h (Brasília)</strong><span id="bolao-timer" role="timer"></span></div>'+(session?.admin?
+      `<strong>Painel do administrador</strong><p>Publique as regras e os resultados para atualizar o ranking.</p><div class="bolao-actions"><button data-bolao="settings">Publicar regras e resultados</button><button data-bolao="toggle">${config?.manuallyClosed?'Reabrir envios antes do prazo':'Encerrar envios antecipadamente'}</button><button data-bolao="refresh">Atualizar</button><button data-bolao="logout">Sair do admin</button></div>`:
+      `<p>${loading?'Carregando bolão…':closed()?'Envios encerrados. '+(config?.expired?'Veja todos os palpites no ranking.':'Os palpites serão revelados ao fim do prazo.'):session?.participant?'Seu palpite foi enviado. Você pode alterar e enviar novamente até o prazo.':'Coloque seu nome, escolha os 18 nomes e clique em Enviar palpites.'}</p><label class="bolao-name">Seu nome<input id="participant-name" maxlength="60" placeholder="Seu nome completo" value="${esc(name)}" ${closed()||session?.participant?'disabled':''}></label><div class="bolao-actions"><button data-bolao="submit" ${closed()?'disabled':''}>${session?.participant?'Enviar alterações':'Enviar palpites'}</button><button data-bolao="refresh">Atualizar ranking</button><button data-bolao="admin">Acesso admin</button></div>${adminLogin?'<form id="bolao-login" class="bolao-form"><label>Código do administrador<input name="code" type="password" autocomplete="off" required maxlength="256"></label><button>Entrar como admin</button></form>':''}`);
+    panel.querySelectorAll('button').forEach(b=>{if(busy)b.disabled=true;});
+    document.querySelectorAll('[data-pick],[data-clear],[data-points]').forEach(e=>{e.disabled=busy||(session?.admin?e.dataset.field==='picks':e.dataset.field==='results'||e.matches('[data-points]')||closed());});
+    $('#save-state').textContent=busy?'Enviando…':dirty?'Alterações não enviadas':session?.admin?'Administrador':session?.participant?'Palpites enviados':'Envie para participar';tick();
   }
-  render = function () {
-    originalRender();
-    if (view === 'bolao') {
-      $('#section-label').textContent = 'BOLÃO'; $('#app').innerHTML = dashboard();
-    }
+  render=function(){
+    if(!session?.admin&&['resultados','pontuacao'].includes(view))view='palpites';originalRender();
+    if(view==='bolao'){$('#section-label').textContent='RANKING';$('#app').innerHTML=heading('Ranking do bolão.','Todos que enviaram aparecem aqui. A pontuação segue os resultados publicados pelo administrador.')+table();}
+    else if(view==='palpites')$('#app').insertAdjacentHTML('beforeend','<section class="bolao-ranking"><h2>Ranking do bolão</h2><p>Os palpites de todos ficam disponíveis após o prazo.</p>'+table()+'</section>');
     controls();
   };
-  save = function () {
-    originalSave();
-    if (session) { dirty = true; $('#save-state').textContent = 'Rascunho — ainda não publicado'; }
-  };
-  window.bolaoImport = function (next) {
-    if (!apiUrl) return next;
-    if (!session) throw new Error('Entre no bolão antes de importar seu backup.');
-    if (session.admin) return { ...next, picks: state.picks };
-    if (config.closed) throw new Error('Os envios estão encerrados.');
-    return { ...next, results: state.results, points: state.points };
-  };
-  async function perform(action) {
-    if (busy) return;
-    busy = true; controls();
-    try { await action(); }
-    catch (e) { toast(e.message); }
-    finally { busy = false; render(); }
-  }
-  document.addEventListener('submit', event => {
-    if (event.target.id === 'bolao-login') {
-      event.preventDefault();
-      const fields = new FormData(event.target), token = String(fields.get('code')).trim(), admin = fields.has('admin');
-      perform(async () => {
-        session = { token, admin }; dirty = false;
-        try { await load(true); remember(); view = admin ? 'bolao' : 'palpites'; location.hash = view; }
-        catch (e) { session = null; remember(); throw e; }
-      });
-    }
-    if (event.target.id === 'bolao-invite') {
-      event.preventDefault(); const name = new FormData(event.target).get('name');
-      perform(async () => {
-        if (dirty) throw new Error('Publique as alterações de regras e resultados antes de criar um convite.');
-        invitation = await request('/admin/participants', 'POST', { name }); await load();
-      });
-    }
+  // Escolhas apenas na memória; o banco só muda ao clicar em Enviar.
+  save=function(){dirty=true;$('#save-state').textContent='Alterações não enviadas';};
+  window.bolaoImport=next=>{if(!session?.admin&&closed())throw Error('O prazo para preencher está encerrado.');return session?.admin?{...next,picks:state.picks}:{...next,results:state.results,points:state.points};};
+  async function perform(action){if(busy)return;busy=true;controls();try{await action();}catch(e){toast(e.message);}finally{busy=false;render();}}
+  document.addEventListener('input',e=>{if(e.target.id==='participant-name')name=e.target.value;});
+  document.addEventListener('submit',e=>{
+    if(e.target.id!=='bolao-login')return;e.preventDefault();const token=String(new FormData(e.target).get('code')).trim();
+    perform(async()=>{const previous=session;session={token,admin:true};try{await load();dirty=false;view='bolao';location.hash=view;adminLogin=false;}catch(error){session=previous;throw error;}});
   });
-  document.addEventListener('click', event => {
-    const action = event.target.closest('[data-bolao]')?.dataset.bolao;
-    if (!action) return;
-    if (action === 'logout') {
-      if (dirty && !confirm('Sair sem enviar as alterações? O rascunho permanece neste navegador.')) return;
-      session = null; config = null; participants = []; invitation = null; dirty = false; remember();
-      KEY = 'nba-awards-2026-27-v1'; state = defaults(); view = 'palpites'; location.hash = view; render(); return;
-    }
-    if (action === 'export-all') {
-      const blob = new Blob([JSON.stringify({ season: '2026-27', settings: config, participants }, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob), link = document.createElement('a');
-      link.href = url; link.download = 'nba-bolao-todos.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); return;
-    }
-    perform(async () => {
-      if (action === 'copy') { await navigator.clipboard.writeText(invitation.token); toast('Código copiado.'); return; }
-      if (action === 'refresh') {
-        if (dirty && !confirm('Descartar as alterações locais e carregar os dados salvos no bolão?')) return;
-        await load(); dirty = false; return;
+  document.addEventListener('click',e=>{
+    const action=e.target.closest('[data-bolao]')?.dataset.bolao;if(!action)return;
+    if(action==='admin'){adminLogin=!adminLogin;controls();return;}
+    if(action==='logout'){if(dirty&&!confirm('Sair sem publicar as alterações?'))return;session=null;state=defaults();dirty=false;view='palpites';location.hash=view;perform(async()=>{await load();});return;}
+    perform(async()=>{
+      if(action==='refresh'){if(session?.admin&&dirty&&!confirm('Descartar alterações locais e atualizar?'))return;await load(true);if(session?.admin)dirty=false;return;}
+      if(action==='submit'){
+        if(closed())throw Error('O prazo para enviar está encerrado.');if(!name.trim())throw Error('Coloque seu nome antes de enviar.');if(AWARDS.some(([id])=>state.picks[id].some(v=>!v)))throw Error('Complete as 18 escolhas antes de enviar.');
+        if(session?.participant){const result=await request('/picks','PUT',{picks:state.picks,revision:session.participant.revision});Object.assign(session.participant,result,{picks:structuredClone(state.picks)});}
+        else{const result=await request('/entries','POST',{name,picks:state.picks});session={token:result.token,participant:result.participant,admin:false};name=result.participant.name;remember();}
+        dirty=false;await load(true);toast('Palpites enviados! Seu nome está no ranking.');return;
       }
-      if (action === 'submit') {
-        if (AWARDS.some(([id]) => state.picks[id].some(v => !v))) throw new Error('Complete as 18 escolhas antes de enviar.');
-        const result = await request('/picks', 'PUT', { picks: state.picks, revision: session.participant.revision });
-        Object.assign(session.participant, result, { picks: structuredClone(state.picks) }); dirty = false; cacheState(); toast('Seus palpites foram salvos no bolão.'); return;
-      }
-      if (action === 'settings' || action === 'toggle') {
-        const closed = action === 'toggle' ? !config.closed : config.closed;
-        if (action === 'toggle' && !confirm(closed ? 'Encerrar os envios de todos os participantes e publicar as regras e resultados atuais?' : 'Reabrir os envios e publicar as regras e resultados atuais?')) return;
-        const result = await request('/admin/settings', 'PUT', { results: state.results, points: state.points, closed, revision: config.revision });
-        applySettings(result.settings); dirty = false; await load(); toast('Bolão atualizado.');
+      if(action==='settings'||action==='toggle'){
+        const manual=action==='toggle'?!config.manuallyClosed:config.manuallyClosed;if(action==='toggle'&&!confirm(manual?'Encerrar os envios antecipadamente?':'Reabrir os envios? O prazo de 20/10 às 14h continuará valendo.'))return;
+        const result=await request('/admin/settings','PUT',{results:state.results,points:state.points,closed:manual,revision:config.revision});applySettings(result.settings);dirty=false;await load();toast('Bolão atualizado.');
       }
     });
   });
-  // Impede ações de edição enquanto uma requisição está em andamento ou sem permissão.
-  document.addEventListener('click', event => {
-    if (!apiUrl) return;
-    const target = event.target.closest('[data-pick], [data-clear], [data-candidate]');
-    if (!target) return;
-    const field = target.dataset.field || active?.field;
-    if (!session || busy || (session.admin ? field === 'picks' : field === 'results' || config?.closed)) {
-      event.preventDefault(); event.stopImmediatePropagation();
-    }
-  }, true);
-  window.addEventListener('hashchange', () => {
-    if (location.hash === '#bolao') { view = 'bolao'; render(); }
-  });
-  window.addEventListener('beforeunload', event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } });
-  if (location.hash === '#bolao') view = 'bolao';
-  render();
-  try {
-    const saved = apiUrl && sessionStorage.getItem('nba-bolao-session');
-    if (saved) {
-      session = { ...JSON.parse(saved), admin: false };
-      perform(async () => { try { await load(true); } catch (e) { session = null; remember(); throw e; } });
-    }
-  } catch { /* O participante pode entrar novamente com seu código. */ }
+  document.addEventListener('click',e=>{const target=e.target.closest('[data-pick],[data-clear],[data-candidate]');if(!target)return;const field=target.dataset.field||active?.field;if(busy||(session?.admin?field==='picks':field==='results'||closed())){e.preventDefault();e.stopImmediatePropagation();}},true);
+  window.addEventListener('hashchange',()=>{if(location.hash==='#bolao'){view='bolao';render();}});
+  window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
+  setInterval(()=>{tick();if(config&&timeLeft()===0&&!expiredFetched&&!busy){expiredFetched=true;config.closed=true;$('#picker').close();render();perform(async()=>{try{await load(true);}catch(e){expiredFetched=false;throw e;}});}},1000);
+  if(location.hash==='#bolao')view='bolao';state=defaults();
+  try{const saved=localStorage.getItem('nba-bolao-entry')||sessionStorage.getItem('nba-bolao-session');if(saved)session={...JSON.parse(saved),admin:false};}catch{}
+  render();perform(async()=>{try{await load();}catch(e){if(session){session=null;await load();}else throw e;}});
 })();

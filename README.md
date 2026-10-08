@@ -4,16 +4,18 @@ Bolão em português para escolher o top 3 de seis prêmios da NBA. A interface 
 
 ## Usar
 
-No site publicado, entre com seu código individual, preencha as 18 escolhas e clique em **Enviar palpites**. As alterações anteriores ao envio são rascunhos locais. O mesmo código permite acessar seus palpites em outro dispositivo. Para uma prévia sem o bolão online, abra `dist/index.html` ou execute `node scripts/preview.mjs`.
+No site publicado, coloque seu nome, preencha as 18 escolhas e clique em **Enviar palpites**. Não há código para participantes nem salvamento automático. Antes de enviar, as escolhas ficam apenas na memória da página. Os palpites enviados podem ser recuperados e alterados no mesmo navegador até o prazo, sem digitar um código.
 
 - **Meus palpites:** escolha 1º, 2º e 3º para MVP, Rookie of the Year, Coach of the Year, Clutch Player of the Year, Sixth Man of the Year e Most Improved Player.
 - **Pontuação:** configure por prêmio os pontos para cada posição exata e para nome no top 3 em posição diferente. Esses valores não se somam. Padrão: 10 / 5 / 3 e 0 fora da posição.
 - **Resultados:** registre manualmente o top 3 final; o total é recalculado. Resultados incompletos produzem uma pontuação parcial.
 - **Base:** busca e filtro por time para jogadores e técnicos.
 
-O organizador cria convites individuais na aba **Bolão**, consulta todos os palpites, publica as regras e os resultados e encerra/reabre os envios. Os participantes consultam as regras e resultados, mas não podem alterá-los. Apenas o organizador consulta os palpites dos demais. Pontuação e resultados são compartilhados e a classificação do painel é recalculada automaticamente.
+O ranking público mostra todos que enviaram, com pontuação e posição (empates compartilham a posição). **Pontuação** e **Resultados** aparecem somente após entrar pelo botão **Acesso admin**, usando o código do administrador. O administrador consulta todos os palpites e publica regras e resultados para recalcular o ranking.
 
-Os palpites enviados ficam no banco remoto. Rascunhos ficam no `localStorage` e o convite fica no `sessionStorage` durante a sessão. O código do organizador fica somente na memória da página. Convites são credenciais: envie-os em particular e guarde uma cópia. O banco armazena somente o hash dos códigos. Exportar/importar JSON continua disponível; a importação de um participante preserva regras e resultados centrais e exige novo envio. Mudanças concorrentes são recusadas para evitar sobrescrever outro dispositivo.
+O prazo é **20/10/2026 às 14h em Brasília** (`2026-10-20T17:00:00.000Z`). O contador usa o horário fornecido pelo servidor. Após o prazo, o servidor recusa tanto novos envios quanto alterações e o ranking revela todos os palpites. Encerrar manualmente antes do prazo bloqueia envios, mas não antecipa a revelação. Reabrir manualmente não ultrapassa o prazo.
+
+Os envios ficam no banco remoto. Uma identificação interna fica no `localStorage` somente após enviar, permitindo recuperar o próprio palpite no mesmo navegador; não é exigido código do participante. Os nomes são únicos, ignorando diferença entre maiúsculas/minúsculas e espaços duplicados. O código do admin fica apenas na memória da página. Exportar/importar backups individuais continua disponível; a importação preserva regras centrais e exige clicar em Enviar.
 
 Veja [HOSPEDAGEM.md](HOSPEDAGEM.md) para manutenção, configuração e testes. O código privado do organizador está no arquivo local `.dev.vars`, ignorado pelo Git, e no segredo `ADMIN_KEY` da Cloudflare. Nunca o inclua no site ou repositório.
 
