@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Atualizando o bolão</title></head>
+<body style="margin:40px;font:18px Arial,sans-serif;color:#071b3c">
+<p id="status" role="status">Atualizando o bolão…</p>
+<script>
+(async () => {
+  const base = new URL('./', location.href);
+  try {
+    if (!('serviceWorker' in navigator)) throw Error('Sem suporte');
+    // O endereço desta página é novo, portanto não depende do HTML antigo em cache.
+    const registration = await navigator.serviceWorker.register(new URL('sw.js', base), { scope: base.pathname, updateViaCache: 'none' });
+    await registration.update();
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller) {
+      await Promise.race([
+        new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true })),
+        new Promise((_, reject) => setTimeout(() => reject(Error('Tempo excedido')), 15000))
+      ]);
+    }
+    location.replace(base.href);
+  } catch {
+    // Um endereço novo carrega o HTML atual mesmo quando service workers estão bloqueados.
+    location.replace(base.href + '?refresh=' + Date.now());
+  }
+})();
+</script>
+</body>
+</html>
