@@ -18,7 +18,7 @@ const server=createServer(async(req,res)=>{
       res.writeHead(response.status,Object.fromEntries(response.headers));res.end(await response.text());return;
     }
     const path=new URL(req.url,'http://localhost').pathname;
-    res.setHeader('Content-Type',({'.js':'text/javascript','.css':'text/css','.html':'text/html','.png':'image/png'})[extname(path)]||'text/html');
+    res.setHeader('Content-Type',({'.js':'text/javascript','.css':'text/css','.html':'text/html','.png':'image/png','.svg':'image/svg+xml'})[extname(path)]||'text/html');
     if(path==='/config.js'){res.end('window.BOLAO_CONFIG='+JSON.stringify({apiUrl:url+'/api'})+';');return;}
     const file=resolve(root,'.'+(path==='/'?'/index.html':path));if(!file.startsWith(root+sep))throw Error('Invalid path');res.end(readFileSync(file));
   }catch{res.writeHead(404);res.end();}
@@ -38,8 +38,14 @@ try{
   }
   assert.equal(sqlite.prepare('SELECT count(*) AS n FROM participants').get().n,0);
   for(const key of ['east_champion','east_mvp','west_champion','west_mvp']){
-    const select=page.locator('[data-conference="'+key+'"]');
-    await select.selectOption(await select.locator('option').nth(1).getAttribute('value'));
+    await page.locator('[data-conference="'+key+'"]').click();
+    const first=page.locator('[data-conference-choice]').first();
+    const chosen=await first.getAttribute('data-conference-choice');
+    const title=await first.locator('b').textContent();
+    await page.locator('#search').fill(title);
+    assert.ok(await page.locator('[data-conference-choice]').count()>0);
+    if(key.endsWith('champion'))assert.equal(await page.locator('#choices .team-logo img').first().isVisible(),true);
+    await page.locator('[data-conference-choice="'+chosen+'"]').click();
   }
   assert.match(await page.locator('#save-state').textContent(),/não enviadas/);
   await page.locator('[data-bolao=submit]').click();await page.waitForFunction(()=>document.querySelector('#save-state').textContent==='Palpites enviados');

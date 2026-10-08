@@ -59,6 +59,7 @@
   // Escolhas apenas na memória; o banco só muda ao clicar em Enviar.
   save=function(){dirty=true;$('#save-state').textContent='Alterações não enviadas';};
   window.bolaoCanBackup=()=>Boolean(session?.admin);
+  window.bolaoCanEditConference=field=>!busy&&(session?.admin?field==='results':field==='picks'&&!closed());
   window.bolaoImport=next=>{if(!session?.admin)throw Error('Importar backup está disponível somente para o admin.');return {...next,picks:state.picks};};
   async function perform(action){if(busy)return;busy=true;controls();try{await action();}catch(e){toast(e.message);}finally{busy=false;render();}}
   document.addEventListener('input',e=>{if(e.target.id==='participant-name')name=e.target.value;});
