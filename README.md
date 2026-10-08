@@ -49,3 +49,6 @@ Sintaxe JavaScript e testes de lógica verificam contagem e IDs da base, pontua�
 ## Identidade visual
 
 Interface em azul, vermelho e branco, com pódios por prêmio e fotos oficiais dos jogadores. As três fotos do cabeçalho são locais; as demais são carregadas do CDN da NBA e exibem as iniciais caso não estejam disponíveis. As escolhas e backups mantêm o mesmo formato.
+
+## Palpites das conferências
+Além dos seis top 3, cada participante escolhe campeão e MVP das finais do Leste e do Oeste: 22 escolhas ao todo. Os quatro acertos valem 10 pontos cada por padrão, configuráveis pelo admin. Times e jogadores são filtrados pela conferência conforme a base cadastrada. Palpites anteriores continuam válidos; é preciso completar os campos novos e reenviar antes do prazo para pontuar neles.

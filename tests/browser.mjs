@@ -37,9 +37,14 @@ try{
     await page.locator(`[data-pick=${award}][data-field=picks][data-rank="${rank}"]`).click();await page.locator('[data-candidate]:enabled').first().click();
   }
   assert.equal(sqlite.prepare('SELECT count(*) AS n FROM participants').get().n,0);
+  for(const key of ['east_champion','east_mvp','west_champion','west_mvp']){
+    const select=page.locator('[data-conference="'+key+'"]');
+    await select.selectOption(await select.locator('option').nth(1).getAttribute('value'));
+  }
   assert.match(await page.locator('#save-state').textContent(),/não enviadas/);
   await page.locator('[data-bolao=submit]').click();await page.waitForFunction(()=>document.querySelector('#save-state').textContent==='Palpites enviados');
   assert.equal(sqlite.prepare('SELECT count(*) AS n FROM participants').get().n,1);
+  assert.equal(Object.values(JSON.parse(sqlite.prepare('SELECT picks FROM participants').get().picks).conferences).filter(Boolean).length,4);
   await page.getByText('Ana Silva',{exact:true}).waitFor();
   assert.equal(await page.locator('details').count(),0);
   await page.reload();await page.waitForFunction(()=>document.querySelector('#save-state').textContent==='Palpites enviados');

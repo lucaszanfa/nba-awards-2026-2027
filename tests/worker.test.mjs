@@ -9,6 +9,7 @@ import players from '../dist/players.json' with { type: 'json' };
 const origin = 'https://lucaszanfa.github.io';
 const admin = 'test-only-organizer-secret-'.padEnd(64, 'a');
 const picks = Object.fromEntries(awards.map(id => [id, id === 'coy' ? ['coach-BOS', 'coach-BKN', 'coach-NYK'] : players.players.slice(0, 3).map(p => p.id)]));
+picks.conferences = { east_champion:'BOS', west_champion:'LAL', east_mvp:players.players.find(p=>p.team==='BOS').id, west_mvp:players.players.find(p=>p.team==='LAL').id };
 // Executa o SQL real da API num SQLite em memória com a interface do D1.
 function environment() {
   const sqlite = new DatabaseSync(':memory:');
@@ -68,7 +69,7 @@ test('encerramento e conflitos são protegidos no servidor, pontuação segue os
   assert.equal((await call(env, '/admin/settings', { token: admin, method: 'PUT', data: central })).status, 200);
   assert.equal((await call(env, '/picks', { token: user.token, method: 'PUT', data: { picks, revision: 1 } })).status, 423);
   assert.equal((await call(env, '/admin/settings', { token: admin, method: 'PUT', data: central })).status, 409);
-  assert.equal((await call(env, '/admin/dashboard', { token: admin })).data.participants[0].score, 108);
+  assert.equal((await call(env, '/admin/dashboard', { token: admin })).data.participants[0].score, 148);
   const reopen = { ...central, closed: false, revision: 1 };
   assert.equal((await call(env, '/admin/settings', { token: admin, method: 'PUT', data: reopen })).status, 200);
   assert.equal((await call(env, '/picks', { token: user.token, method: 'PUT', data: { picks, revision: 1 } })).status, 200);
@@ -96,7 +97,7 @@ test('pontuação parcial, posição diferente e posição exata não se somam',
   assert.equal(score(picks, blank, points), 0);
   assert.equal(score(picks, { ...blank, mvp: [picks.mvp[0], '', ''] }, points), 10);
   assert.equal(score(picks, { ...blank, mvp: [picks.mvp[1], picks.mvp[0], ''] }, points), 4);
-  assert.equal(score(picks, picks, points), 108);
+  assert.equal(score(picks, picks, points), 148);
 });
 test('envio pelo nome sem código, ranking público e revelação somente depois do prazo', async () => {
   const env = environment();
@@ -123,4 +124,13 @@ test('envio pelo nome sem código, ranking público e revelação somente depois
   assert.equal((await call(ended, '/entries', { method: 'POST', data: { name: 'Bruno', picks } })).status, 423);
   assert.equal(env.sqlite.prepare('SELECT count(*) AS n FROM participants').get().n, 1);
   env.sqlite.close();
+});
+test('conferências validam times e jogadores por lado e preservam palpites antigos', () => {
+  assert.throws(()=>validatePicks({...picks,conferences:{...picks.conferences,east_champion:'LAL'}},true));
+  assert.throws(()=>validatePicks({...picks,conferences:{...picks.conferences,east_mvp:picks.conferences.west_mvp}},true));
+  assert.throws(()=>validatePicks({...picks,conferences:undefined},true));
+  const legacy={...picks};delete legacy.conferences;
+  const points=Object.fromEntries(awards.map(id=>[id,{exact:[10,5,3],wrong:0}]));
+  assert.equal(score(legacy,picks,points),108);
+  assert.equal(score(picks,picks,{...points,conferences:{east_champion:20,east_mvp:5,west_champion:15,west_mvp:5}}),153);
 });
