@@ -1,6 +1,6 @@
 import players from '../dist/players.json' with { type: 'json' };
 
-export const awards = ['mvp', 'roy', 'coy', 'clutch', 'sixth', 'mip'];
+export const awards = ['mvp', 'roy', 'coy', 'clutch', 'sixth', 'mip', 'dpoy'];
 const playerList = Array.isArray(players) ? players : players.players;
 const playerIDs = new Set(playerList.map(p => p.id));
 const coachIDs = new Set(playerList.map(p => `coach-${p.team}`));
@@ -20,7 +20,7 @@ export function validatePicks(input, complete = false) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Seleções inválidas.');
   const clean = {};
   for (const id of awards) {
-    const values = input[id], allowed = id === 'coy' ? coachIDs : playerIDs;
+    const values = input[id] ?? (id === 'dpoy' && !complete ? ['', '', ''] : undefined), allowed = id === 'coy' ? coachIDs : playerIDs;
     if (!Array.isArray(values) || values.length !== 3 ||
         values.some(v => typeof v !== 'string' || (v === '' ? complete : !allowed.has(v))) ||
         new Set(values.filter(Boolean)).size !== values.filter(Boolean).length) {
@@ -34,7 +34,7 @@ export function validatePicks(input, complete = false) {
 export function validatePoints(input) {
   const clean = {};
   for (const id of awards) {
-    const p = input?.[id];
+    const p = input?.[id] ?? (id === 'dpoy' ? { exact: [10, 5, 3], wrong: 0 } : undefined);
     if (!p || !Array.isArray(p.exact) || p.exact.length !== 3 ||
         [...p.exact, p.wrong].some(v => typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1000000)) {
       throw new Error('Pontuação inválida.');
@@ -51,8 +51,8 @@ export function validatePoints(input) {
 }
 export function score(picks, results, points) {
   if (!picks) return 0;
-  return awards.reduce((total, id) => total + picks[id].reduce((sum, value, i) => {
+  return awards.reduce((total, id) => total + (picks[id] ?? []).reduce((sum, value, i) => {
     if (!value) return sum;
-    return sum + (results[id][i] === value ? points[id].exact[i] : results[id].includes(value) ? points[id].wrong : 0);
+    return sum + (results[id]?.[i] === value ? points[id].exact[i] : results[id]?.includes(value) ? points[id].wrong : 0);
   }, 0), 0) + conferenceFields.reduce((total, key) => total + (picks.conferences?.[key] && picks.conferences[key] === results.conferences?.[key] ? points.conferences?.[key] ?? 10 : 0), 0);
 }

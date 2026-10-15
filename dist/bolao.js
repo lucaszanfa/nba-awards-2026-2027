@@ -11,7 +11,7 @@
   const stamp=v=>v?new Date(v).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}):'Ainda não enviado';
   const timeLeft=()=>Math.max(0,Date.parse(config?.deadline||'2026-10-20T17:00:00Z')-(Date.now()+offset));
   const closed=()=>loading||!config||config.closed||timeLeft()===0;
-  function applySettings(next){config=next;offset=Date.parse(next.serverNow)-Date.now();state.results=structuredClone(next.results);state.points=structuredClone(next.points);state.results.conferences={...conferenceDefaults(),...state.results.conferences};state.points.conferences={...conferencePoints(),...state.points.conferences};}
+  function applySettings(next){config=next;offset=Date.parse(next.serverNow)-Date.now();state.results={...defaults().results,...structuredClone(next.results)};state.points={...defaults().points,...structuredClone(next.points)};state.results.conferences={...conferenceDefaults(),...state.results.conferences};state.points.conferences={...conferencePoints(),...state.points.conferences};}
   async function request(path,method='GET',payload){
     if(!apiUrl)throw Error('O bolão ainda não foi publicado.');
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
@@ -25,7 +25,7 @@
     if(session?.admin){const data=await request('/admin/dashboard');participants=data.participants;applySettings(data.settings);}
     else{
       const data=await request('/public');participants=data.participants;applySettings(data.settings);
-      if(session?.token&&!preserve){const own=await request('/me');session.participant=own.participant;state.picks=own.participant.picks||defaults().picks;name=own.participant.name;applySettings(own.settings);}
+      if(session?.token&&!preserve){const own=await request('/me');session.participant=own.participant;state.picks={...defaults().picks,...own.participant.picks};name=own.participant.name;applySettings(own.settings);}
     }
     loading=false;
   }
@@ -33,7 +33,7 @@
     const rows=participants.filter(p=>p.picks||p.updatedAt);let rank=0,previous=null;
     return '<div class="table-wrap"><table><thead><tr><th>POSIÇÃO</th><th>NOME</th><th>PONTOS</th><th>ENVIADO EM</th><th>PALPITES</th></tr></thead><tbody>'+rows.map((p,i)=>{
       if(p.score!==previous)rank=i+1;previous=p.score;
-      const detail=p.picks?'<details><summary>Ver palpites</summary>'+AWARDS.map(([id,code])=>'<p><b>'+code+'</b>: '+p.picks[id].map((v,n)=>(n+1)+'º '+esc(lookup.get(v)?.name||'—')).join(' · ')+'</p>').join('')+CONFERENCE_FIELDS.map(([id,label])=>'<p><b>'+label+'</b>: '+esc(conferenceName(id,p.picks.conferences?.[id]))+'</p>').join('')+'</details>':'Disponíveis após o prazo';
+      const detail=p.picks?'<details><summary>Ver palpites</summary>'+AWARDS.map(([id,code])=>'<p><b>'+code+'</b>: '+(p.picks[id]||['','','']).map((v,n)=>(n+1)+'º '+esc(lookup.get(v)?.name||'—')).join(' · ')+'</p>').join('')+CONFERENCE_FIELDS.map(([id,label])=>'<p><b>'+label+'</b>: '+esc(conferenceName(id,p.picks.conferences?.[id]))+'</p>').join('')+'</details>':'Disponíveis após o prazo';
       return '<tr><td>'+rank+'º</td><td>'+esc(p.name)+'</td><td>'+p.score+'</td><td>'+esc(stamp(p.updatedAt))+'</td><td>'+detail+'</td></tr>';
     }).join('')+(rows.length?'':'<tr><td colspan="5">Ninguém enviou palpites ainda.</td></tr>')+'</tbody></table></div>';
   }
@@ -43,7 +43,7 @@
     document.querySelectorAll('[data-view=resultados],[data-view=pontuacao]').forEach(b=>b.hidden=!session?.admin);
     panel.innerHTML='<div class="bolao-deadline"><strong>Envios até 20/10/2026, às 14h (Brasília)</strong><span id="bolao-timer" role="timer"></span></div>'+(session?.admin?
       `<strong>Painel do administrador</strong><p>Publique as regras e os resultados para atualizar o ranking.</p><div class="bolao-actions"><button data-bolao="settings">Publicar regras e resultados</button><button data-bolao="toggle">${config?.manuallyClosed?'Reabrir envios antes do prazo':'Encerrar envios antecipadamente'}</button><button data-bolao="refresh">Atualizar</button><button data-bolao="logout">Sair do admin</button></div>`:
-      `<p>${loading?'Carregando bolão…':closed()?'Envios encerrados. '+(config?.expired?'Veja todos os palpites no ranking.':'Os palpites serão revelados ao fim do prazo.'):session?.participant?'Seu palpite foi enviado. Você pode alterar e enviar novamente até o prazo.':'Coloque seu nome, faça as 22 escolhas e clique em Enviar palpites.'}</p><label class="bolao-name">Seu nome<input id="participant-name" maxlength="60" placeholder="Seu nome" value="${esc(name)}" ${closed()||session?.participant?'disabled':''}></label><div class="bolao-actions"><button data-bolao="submit" ${closed()?'disabled':''}>${session?.participant?'Enviar alterações':'Enviar palpites'}</button><button data-bolao="refresh">Atualizar ranking</button><button data-bolao="admin">Acesso admin</button></div>${adminLogin?'<form id="bolao-login" class="bolao-form"><label>Código do administrador<input name="code" type="password" autocomplete="off" required maxlength="256"></label><button>Entrar como admin</button></form>':''}`);
+      `<p>${loading?'Carregando bolão…':closed()?'Envios encerrados. '+(config?.expired?'Veja todos os palpites no ranking.':'Os palpites serão revelados ao fim do prazo.'):session?.participant?(session.participant.picks&&!session.participant.picks.dpoy?'Seu palpite está preservado. Complete o top 3 de Defensive Player of the Year e clique em Enviar alterações até o prazo.':'Seu palpite foi enviado. Você pode alterar e enviar novamente até o prazo.'):'Coloque seu nome, faça as 25 escolhas e clique em Enviar palpites.'}</p><label class="bolao-name">Seu nome<input id="participant-name" maxlength="60" placeholder="Seu nome" value="${esc(name)}" ${closed()||session?.participant?'disabled':''}></label><div class="bolao-actions"><button data-bolao="submit" ${closed()?'disabled':''}>${session?.participant?'Enviar alterações':'Enviar palpites'}</button><button data-bolao="refresh">Atualizar ranking</button><button data-bolao="admin">Acesso admin</button></div>${adminLogin?'<form id="bolao-login" class="bolao-form"><label>Código do administrador<input name="code" type="password" autocomplete="off" required maxlength="256"></label><button>Entrar como admin</button></form>':''}`);
     panel.querySelectorAll('button').forEach(b=>{if(busy)b.disabled=true;});
     document.querySelectorAll('[data-pick],[data-clear],[data-points],[data-conference],[data-conference-points]').forEach(e=>{e.disabled=busy||(session?.admin?e.dataset.field==='picks':e.dataset.field==='results'||e.matches('[data-points],[data-conference-points]')||closed());});
     $('#save-state').textContent=busy?'Enviando…':dirty?'Alterações não enviadas':session?.admin?'Administrador':session?.participant?'Palpites enviados':'Envie para participar';tick();
@@ -85,7 +85,7 @@
     perform(async()=>{
       if(action==='refresh'){if(session?.admin&&dirty&&!confirm('Descartar alterações locais e atualizar?'))return;await load(true);if(session?.admin)dirty=false;return;}
       if(action==='submit'){
-        if(closed())throw Error('O prazo para enviar está encerrado.');if(!name.trim())throw Error('Coloque seu nome antes de enviar.');if(AWARDS.some(([id])=>state.picks[id].some(v=>!v)))throw Error('Complete as 18 escolhas antes de enviar.');
+        if(closed())throw Error('O prazo para enviar está encerrado.');if(!name.trim())throw Error('Coloque seu nome antes de enviar.');if(AWARDS.some(([id])=>state.picks[id].some(v=>!v)))throw Error('Complete as 21 escolhas antes de enviar.');
         if(CONFERENCE_FIELDS.some(([id])=>!state.picks.conferences?.[id]))throw Error('Escolha também os campeões e os MVPs das duas conferências.');
         if(session?.participant){const result=await request('/picks','PUT',{picks:state.picks,revision:session.participant.revision});Object.assign(session.participant,result,{picks:structuredClone(state.picks)});}
         else{const result=await request('/entries','POST',{name,picks:state.picks});session={token:result.token,participant:result.participant,admin:false};name=result.participant.name;remember();}

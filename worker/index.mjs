@@ -41,7 +41,7 @@ async function settings(db, env = {}) {
   if (!row) throw new HTTPError(503, 'Banco ainda não configurado.');
   const deadline = env.DEADLINE || DEFAULT_DEADLINE;
   const now = Date.now(), expired = now >= Date.parse(deadline);
-  return { results: JSON.parse(row.results), points: JSON.parse(row.points), closed: Boolean(row.closed) || expired, manuallyClosed: Boolean(row.closed), expired, deadline, serverNow: new Date(now).toISOString(), revision: row.revision };
+  return { results: validatePicks(JSON.parse(row.results)), points: validatePoints(JSON.parse(row.points)), closed: Boolean(row.closed) || expired, manuallyClosed: Boolean(row.closed), expired, deadline, serverNow: new Date(now).toISOString(), revision: row.revision };
 }
 async function auth(request, env, admin = false) {
   const token = request.headers.get('authorization')?.match(/^Bearer (\S+)$/)?.[1];

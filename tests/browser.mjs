@@ -33,7 +33,7 @@ try{
   assert.equal(await page.locator('[data-view=resultados]').isVisible(),false);
   assert.equal(await page.locator('[data-view=pontuacao]').isVisible(),false);
   await page.locator('#participant-name').fill('Ana Silva');
-  for(const award of ['mvp','roy','coy','clutch','sixth','mip'])for(let rank=0;rank<3;rank++){
+  for(const award of ['mvp','roy','coy','clutch','sixth','mip','dpoy'])for(let rank=0;rank<3;rank++){
     await page.locator(`[data-pick=${award}][data-field=picks][data-rank="${rank}"]`).click();await page.locator('[data-candidate]:enabled').first().click();
   }
   assert.equal(sqlite.prepare('SELECT count(*) AS n FROM participants').get().n,0);
@@ -54,7 +54,22 @@ try{
   await page.getByText('Ana Silva',{exact:true}).waitFor();
   assert.equal(await page.locator('details').count(),0);
   await page.reload();await page.waitForFunction(()=>document.querySelector('#save-state').textContent==='Palpites enviados');
+  assert.equal(await page.locator('[data-clear][data-field=picks]').count(),21);
+  const originalPicks=JSON.parse(sqlite.prepare('SELECT picks FROM participants').get().picks);
+  const legacyPicks=structuredClone(originalPicks);delete legacyPicks.dpoy;
+  sqlite.prepare('UPDATE participants SET picks = ?').run(JSON.stringify(legacyPicks));
+  await page.reload();await page.waitForFunction(()=>document.querySelector('#save-state').textContent==='Palpites enviados');
   assert.equal(await page.locator('[data-clear][data-field=picks]').count(),18);
+  assert.match(await page.locator('#bolao-panel').textContent(),/Complete o top 3 de Defensive Player of the Year/);
+  const restored=await page.evaluate(()=>state.picks);
+  const withoutDpoy=structuredClone(restored);delete withoutDpoy.dpoy;
+  assert.deepEqual(withoutDpoy,legacyPicks);
+  for(let rank=0;rank<3;rank++){
+    await page.locator(`[data-pick=dpoy][data-field=picks][data-rank="${rank}"]`).click();await page.locator('[data-candidate]:enabled').first().click();
+  }
+  await page.locator('[data-bolao=submit]').click();await page.waitForFunction(()=>document.querySelector('#save-state').textContent==='Palpites enviados');
+  assert.deepEqual(JSON.parse(sqlite.prepare('SELECT picks FROM participants').get().picks),originalPicks);
+  assert.equal(sqlite.prepare('SELECT count(*) AS n FROM participants').get().n,1);
   const other=await newPage();assert.equal(await other.locator('[data-clear][data-field=picks]').count(),0);
   await other.goto(url+'/#resultados');await other.waitForFunction(()=>!document.querySelector('[data-bolao=refresh]').disabled);
   assert.equal(await other.locator('[data-pick][data-field=results]').count(),0);

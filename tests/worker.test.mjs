@@ -69,7 +69,7 @@ test('encerramento e conflitos são protegidos no servidor, pontuação segue os
   assert.equal((await call(env, '/admin/settings', { token: admin, method: 'PUT', data: central })).status, 200);
   assert.equal((await call(env, '/picks', { token: user.token, method: 'PUT', data: { picks, revision: 1 } })).status, 423);
   assert.equal((await call(env, '/admin/settings', { token: admin, method: 'PUT', data: central })).status, 409);
-  assert.equal((await call(env, '/admin/dashboard', { token: admin })).data.participants[0].score, 148);
+  assert.equal((await call(env, '/admin/dashboard', { token: admin })).data.participants[0].score, 166);
   const reopen = { ...central, closed: false, revision: 1 };
   assert.equal((await call(env, '/admin/settings', { token: admin, method: 'PUT', data: reopen })).status, 200);
   assert.equal((await call(env, '/picks', { token: user.token, method: 'PUT', data: { picks, revision: 1 } })).status, 200);
@@ -97,7 +97,7 @@ test('pontuação parcial, posição diferente e posição exata não se somam',
   assert.equal(score(picks, blank, points), 0);
   assert.equal(score(picks, { ...blank, mvp: [picks.mvp[0], '', ''] }, points), 10);
   assert.equal(score(picks, { ...blank, mvp: [picks.mvp[1], picks.mvp[0], ''] }, points), 4);
-  assert.equal(score(picks, picks, points), 148);
+  assert.equal(score(picks, picks, points), 166);
 });
 test('envio pelo nome sem código, ranking público e revelação somente depois do prazo', async () => {
   const env = environment();
@@ -131,6 +131,28 @@ test('conferências validam times e jogadores por lado e preservam palpites anti
   assert.throws(()=>validatePicks({...picks,conferences:undefined},true));
   const legacy={...picks};delete legacy.conferences;
   const points=Object.fromEntries(awards.map(id=>[id,{exact:[10,5,3],wrong:0}]));
-  assert.equal(score(legacy,picks,points),108);
-  assert.equal(score(picks,picks,{...points,conferences:{east_champion:20,east_mvp:5,west_champion:15,west_mvp:5}}),153);
+  assert.equal(score(legacy,picks,points),126);
+  assert.equal(score(picks,picks,{...points,conferences:{east_champion:20,east_mvp:5,west_champion:15,west_mvp:5}}),171);
+});
+
+
+test('DPOY preserva envios antigos, regras e ranking e permite completar a mesma inscrição', async () => {
+  const env = environment();
+  const sent = await call(env, '/entries', { method: 'POST', data: { name: 'Ana', picks } });
+  const legacy = structuredClone(picks); delete legacy.dpoy;
+  env.sqlite.prepare('UPDATE participants SET picks = ? WHERE id = ?').run(JSON.stringify(legacy), sent.data.participant.id);
+  const saved = env.sqlite.prepare('SELECT * FROM participants').get();
+  const config = (await call(env, '/public')).data.settings;
+  assert.deepEqual(config.results.dpoy, ['', '', '']);
+  assert.deepEqual(config.points.dpoy, { exact: [10, 5, 3], wrong: 0 });
+  assert.equal((await call(env, '/admin/settings', { token: admin, method: 'PUT', data: { ...config, results: picks } })).status, 200);
+  assert.equal((await call(env, '/public')).data.participants[0].score, 148);
+  assert.equal((await call(env, '/admin/dashboard', { token: admin })).data.participants[0].score, 148);
+  assert.deepEqual((await call(env, '/me', { token: sent.data.token })).data.participant.picks, legacy);
+  assert.deepEqual(env.sqlite.prepare('SELECT * FROM participants').get(), saved);
+  assert.equal((await call(env, '/picks', { token: sent.data.token, method: 'PUT', data: { picks: legacy, revision: 1 } })).status, 400);
+  assert.equal((await call(env, '/picks', { token: sent.data.token, method: 'PUT', data: { picks, revision: 1 } })).status, 200);
+  assert.equal(env.sqlite.prepare('SELECT count(*) AS n FROM participants').get().n, 1);
+  assert.equal((await call(env, '/public')).data.participants[0].score, 166);
+  env.sqlite.close();
 });

@@ -6,7 +6,7 @@ Banco: Cloudflare D1 `nba-awards-bolao`, binding `DB`.
 
 ## Acesso e uso
 
-1. Compartilhe o endereço do site. Os participantes informam o nome, escolhem os 18 nomes e clicam em **Enviar palpites**, sem código. Até o envio, as escolhas ficam somente na memória da página.
+1. Compartilhe o endereço do site. Os participantes informam o nome, preenchem as 25 escolhas e clicam em **Enviar palpites**, sem código. Até o envio, as escolhas ficam somente na memória da página.
 2. O ranking mostra quem enviou e a pontuação parcial. Após enviar, a mesma pessoa pode alterar e reenviar no mesmo navegador, até o prazo.
 3. Para administrar, clique em **Acesso admin** e use o valor de `ADMIN_KEY` do arquivo **local** `.dev.vars`. Não compartilhe esse código.
 4. As abas **Pontuação** e **Resultados** aparecem somente para o administrador. Configure e clique em **Publicar regras e resultados**.

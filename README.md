@@ -1,12 +1,12 @@
 # NBA Awards 2026–2027
 
-Bolão em português para escolher o top 3 de seis prêmios da NBA. A interface é hospedada no GitHub Pages; a API Cloudflare Workers salva os palpites no D1.
+Bolão em português para escolher o top 3 de sete prêmios da NBA. A interface é hospedada no GitHub Pages; a API Cloudflare Workers salva os palpites no D1.
 
 ## Usar
 
-No site publicado, coloque seu nome, preencha as 18 escolhas e clique em **Enviar palpites**. Não há código para participantes nem salvamento automático. Antes de enviar, as escolhas ficam apenas na memória da página. Os palpites enviados podem ser recuperados e alterados no mesmo navegador até o prazo, sem digitar um código.
+No site publicado, coloque seu nome, preencha as 25 escolhas e clique em **Enviar palpites**. Não há código para participantes nem salvamento automático. Antes de enviar, as escolhas ficam apenas na memória da página. Os palpites enviados podem ser recuperados e alterados no mesmo navegador até o prazo, sem digitar um código.
 
-- **Meus palpites:** escolha 1º, 2º e 3º para MVP, Rookie of the Year, Coach of the Year, Clutch Player of the Year, Sixth Man of the Year e Most Improved Player.
+- **Meus palpites:** escolha 1º, 2º e 3º para MVP, Rookie of the Year, Coach of the Year, Clutch Player of the Year, Sixth Man of the Year Most Improved Player e Defensive Player of the Year.
 - **Pontuação:** configure por prêmio os pontos para cada posição exata e para nome no top 3 em posição diferente. Esses valores não se somam. Padrão: 10 / 5 / 3 e 0 fora da posição.
 - **Resultados:** registre manualmente o top 3 final; o total é recalculado. Resultados incompletos produzem uma pontuação parcial.
 - **Base:** busca e filtro por time para jogadores e técnicos.
@@ -51,4 +51,7 @@ Sintaxe JavaScript e testes de lógica verificam contagem e IDs da base, pontua�
 Interface em azul, vermelho e branco, com pódios por prêmio e fotos oficiais dos jogadores. As três fotos do cabeçalho são locais; as demais são carregadas do CDN da NBA e exibem as iniciais caso não estejam disponíveis. As escolhas e backups mantêm o mesmo formato.
 
 ## Palpites das conferências
-Além dos seis top 3, cada participante escolhe campeão e MVP das finais do Leste e do Oeste: 22 escolhas ao todo. Os quatro acertos valem 10 pontos cada por padrão, configuráveis pelo admin. Times e jogadores são filtrados pela conferência conforme a base cadastrada. Palpites anteriores continuam válidos; é preciso completar os campos novos e reenviar antes do prazo para pontuar neles.
+Além dos sete top 3, cada participante escolhe campeão e MVP das finais do Leste e do Oeste: 25 escolhas ao todo. Os quatro acertos valem 10 pontos cada por padrão, configuráveis pelo admin. Times e jogadores são filtrados pela conferência conforme a base cadastrada. Palpites anteriores continuam válidos; é preciso completar os campos novos e reenviar antes do prazo para pontuar neles.
+
+## Defensive Player of the Year
+O DPOY possui top 3 e pontos de 10 / 5 / 3, com 0 em outra posição. Palpites enviados ficam preservados no banco. Quem enviou antes deve abrir o site no mesmo navegador, preencher o DPOY e clicar em **Enviar alterações** até 20/10/2026 às 14h (Brasília). Sem completar o DPOY, a pessoa continua no ranking e pontua nas outras categorias. Backups antigos continuam compatíveis. Publique a API antes do site; não precisa migrar o banco.
