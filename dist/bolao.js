@@ -29,13 +29,22 @@
     }
     loading=false;
   }
+  function participantPicks(p){
+    return '<div class="participant-picks"><h3>Prêmios individuais <span>Top 3 por categoria</span></h3><div class="ranking-picks-grid">'+AWARDS.map(([id,code,,label])=>
+      '<article class="ranking-award"><header><b>'+code+'</b><span>'+label+'</span></header><ol>'+[0,1,2].map(n=>{
+        const candidate=lookup.get(p.picks[id]?.[n]);
+        return '<li><span class="pick-position">'+(n+1)+'º</span><span><strong>'+esc(candidate?.name||'Não informado')+'</strong>'+(candidate?.teamName?'<small>'+esc(candidate.teamName)+'</small>':'')+'</span></li>';
+      }).join('')+'</ol></article>').join('')+'</div><h3>Finais de conferência</h3><div class="ranking-conferences">'+['east','west'].map(side=>
+      '<article class="ranking-conference"><h4>Conferência '+(side==='east'?'Leste':'Oeste')+'</h4>'+CONFERENCE_FIELDS.filter(([, ,s])=>s===side).map(([id,label,,kind])=>
+        '<div><span>'+ (kind==='team'?'Campeão':'MVP da final')+'</span><strong>'+esc(conferenceName(id,p.picks.conferences?.[id]))+'</strong></div>').join('')+'</article>').join('')+'</div></div>';
+  }
   function table(){
     const rows=participants.filter(p=>p.picks||p.updatedAt);let rank=0,previous=null;
-    return '<div class="table-wrap"><table><thead><tr><th>POSIÇÃO</th><th>NOME</th><th>PONTOS</th><th>ENVIADO EM</th><th>PALPITES</th></tr></thead><tbody>'+rows.map((p,i)=>{
+    return '<div class="table-wrap ranking-table"><table><thead><tr><th>POSIÇÃO</th><th>NOME</th><th>PONTOS</th><th>ENVIADO EM</th><th>PALPITES</th></tr></thead><tbody>'+rows.map((p,i)=>{
       if(p.score!==previous)rank=i+1;previous=p.score;
-      const detail=p.picks?'<details><summary>Ver palpites</summary>'+AWARDS.map(([id,code])=>'<p><b>'+code+'</b>: '+(p.picks[id]||['','','']).map((v,n)=>(n+1)+'º '+esc(lookup.get(v)?.name||'—')).join(' · ')+'</p>').join('')+CONFERENCE_FIELDS.map(([id,label])=>'<p><b>'+label+'</b>: '+esc(conferenceName(id,p.picks.conferences?.[id]))+'</p>').join('')+'</details>':'Disponíveis após o prazo';
-      return '<tr><td>'+rank+'º</td><td>'+esc(p.name)+'</td><td>'+p.score+'</td><td>'+esc(stamp(p.updatedAt))+'</td><td>'+detail+'</td></tr>';
-    }).join('')+(rows.length?'':'<tr><td colspan="5">Ninguém enviou palpites ainda.</td></tr>')+'</tbody></table></div>';
+      const summary='<span class="ranking-position'+(rank<=3?' ranking-podium':'')+'">'+rank+'º</span><strong class="ranking-name">'+esc(p.name)+'</strong><span class="ranking-score">'+p.score+' <small>pts</small></span><span class="ranking-date">'+esc(stamp(p.updatedAt))+'</span>';
+      return '<tr><td colspan="5">'+(p.picks?'<details class="participant-details"><summary aria-label="Ver palpites de '+esc(p.name)+'">'+summary+'<span class="ranking-toggle"><span class="show-picks">Ver palpites</span><span class="hide-picks">Fechar palpites</span><span class="ranking-chevron" aria-hidden="true">⌄</span></span></summary>'+participantPicks(p)+'</details>':'<div class="ranking-summary">'+summary+'<span class="ranking-locked">Disponíveis após o prazo</span></div>')+'</td></tr>';
+    }).join('')+(rows.length?'':'<tr><td colspan="5" class="ranking-empty">Ninguém enviou palpites ainda.</td></tr>')+'</tbody></table></div>';
   }
   function tick(){const node=$('#bolao-timer');if(!node)return;const s=Math.ceil(timeLeft()/1000);node.textContent=s?`${Math.floor(s/86400)}d ${String(Math.floor(s%86400/3600)).padStart(2,'0')}h ${String(Math.floor(s%3600/60)).padStart(2,'0')}m ${String(s%60).padStart(2,'0')}s`:'Prazo encerrado';}
   function controls(){
