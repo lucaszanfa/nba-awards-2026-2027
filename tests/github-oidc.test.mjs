@@ -13,6 +13,8 @@ test('OIDC verifies signatures and exact repository, owner, workflow, branch, au
   const options={fetcher,now:10001};const valid=await sign();assert.equal(await verifyGithubToken(valid,policy,options),true);assert.equal(fetches,1);
   for(const changes of [{iss:'https://evil.test'},{aud:'other'},{repository:'attacker/repo'},{repository_id:'999'},{repository_owner_id:'999'},{ref:'refs/pull/1/merge'},{workflow_ref:'owner/repo/.github/workflows/other.yml@refs/heads/main'},{sub:'repo:owner/repo:pull_request'},{event_name:'pull_request'},{exp:9999},{iat:20000},{nbf:20000}])assert.equal(await verifyGithubToken(await sign(changes),policy,options),false);
   assert.equal(fetches,1,'invalid claims rejected before network access');
+  assert.equal(await verifyGithubToken(await sign({sub:'repo:owner@456/repo@123:ref:refs/heads/main'}),policy,options),true);
+  assert.equal(await verifyGithubToken(await sign({sub:'repo:owner@999/repo@123:ref:refs/heads/main'}),policy,options),false);
   const pieces=valid.split('.');pieces[1]=encode({...claims,run_id:'forged'});assert.equal(await verifyGithubToken(pieces.join('.'),policy,options),false);
   assert.equal(await verifyGithubToken(await sign({}, {alg:'HS256'}),policy,options),false);
   assert.equal(await verifyGithubToken(valid,policy,{...options,fetcher:async()=>new Response('',{status:503})}),false);

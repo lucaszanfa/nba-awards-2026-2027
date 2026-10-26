@@ -10,9 +10,12 @@ export async function verifyGithubToken(token,policy,{fetcher=fetch,now=Math.flo
     const parts=token.split('.');if(parts.length!==3)return reject('format');
     const header=json(parts[0]),claims=json(parts[1]);
     if(header.alg!=='RS256'||typeof header.kid!=='string')return reject('algorithm');
-    const expected={iss:issuer,aud:policy.audience,repository:policy.repository,repository_id:policy.repositoryId,repository_owner_id:policy.ownerId,ref:'refs/heads/main',workflow_ref:`${policy.repository}/.github/workflows/forecasts.yml@refs/heads/main`,sub:`repo:${policy.repository}:ref:refs/heads/main`};
+    const expected={iss:issuer,aud:policy.audience,repository:policy.repository,repository_id:policy.repositoryId,repository_owner_id:policy.ownerId,ref:'refs/heads/main',workflow_ref:`${policy.repository}/.github/workflows/forecasts.yml@refs/heads/main`};
     const mismatch=Object.keys(expected).find(k=>claims[k]!==expected[k]);
     if(mismatch)return reject(mismatch);
+    const [owner,repositoryName]=policy.repository.split('/');
+    const subjects=[`repo:${policy.repository}:ref:refs/heads/main`,`repo:${owner}@${policy.ownerId}/${repositoryName}@${policy.repositoryId}:ref:refs/heads/main`];
+    if(!subjects.includes(claims.sub))return reject('sub');
     if(!['schedule','workflow_dispatch'].includes(claims.event_name))return reject('event');
     if(!Number.isFinite(claims.exp)||!Number.isFinite(claims.iat)||claims.exp<=now||claims.exp>now+660||claims.iat>now+30||claims.iat<now-660||(claims.nbf!==undefined&&(!Number.isFinite(claims.nbf)||claims.nbf>now+30)))return reject('lifetime');
     let keys=fetcher===fetch&&keysUntil>now?cachedKeys:null;
