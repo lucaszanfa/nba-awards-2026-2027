@@ -23,7 +23,7 @@ export async function update({apiUrl,adminKey,sourceUrl,iterations=100000,fetche
   async function api(path,method='GET',payload){
     const credential=adminKey||await identity(apiUrl.replace(/\/$/,''));
     const response=await fetcher(apiUrl.replace(/\/$/,'')+path,{method,redirect:'error',signal:AbortSignal.timeout(30000),headers:{Authorization:'Bearer '+credential,...(payload?{'Content-Type':'application/json'}:{})},...(payload?{body:JSON.stringify(payload)}:{})});
-    if(!response.ok)throw Error('API indisponível: HTTP '+response.status);
+    if(!response.ok){const error=await response.json().catch(()=>({}));throw Error('API indisponível: HTTP '+response.status+(typeof error.error==='string'?' · '+error.error:''));}
     return response.json();
   }
   let snapshot=await api('/admin/forecast-state');
