@@ -45,3 +45,9 @@ Os testes usam SQLite em memória e verificam autenticação, isolamento de dado
 A versão sem URL configurada em `dist/config.js` funciona como prévia local e informa que os palpites não são enviados.
 
 Os planos gratuitos têm cotas e podem mudar. Não há garantia contratual de disponibilidade contínua. Os serviços não dependem de deixar o computador pessoal ligado.
+
+## Previsões automáticas
+
+O workflow `forecasts.yml` recalcula e persiste as previsões diariamente às 07h23 de Brasília. A execução depende das variáveis `FORECAST_ENABLED=true` e `FORECAST_API_URL`. Autentica por identidade temporária GitHub OIDC, restrita ao repositório, branch e workflow, sem copiar a chave do administrador ao GitHub. Pode ser executado manualmente em Actions → Daily championship forecasts → Run workflow.
+
+Sem `FORECAST_SOURCE_URL`, usa os últimos dados importados no D1. Se faltarem dados reais para categorias que pontuam, registra “dados insuficientes”; o agendamento não cria estatísticas ou probabilidades fictícias. Consulte [PREVISOES.md](PREVISOES.md) para fontes, formato, cache e limitações.

@@ -5,9 +5,39 @@ import { readFileSync } from 'node:fs';
 import worker from '../worker/index.mjs';
 import { awards, validatePicks, validatePoints, score } from '../worker/model.mjs';
 import players from '../dist/players.json' with { type: 'json' };
+import {simulate,buildModels} from '../dist/forecast-engine.mjs';
 
 const origin = 'https://lucaszanfa.github.io';
 const admin = 'test-only-organizer-secret-'.padEnd(64, 'a');
+
+test('forecast input and history: authentication, validation, concurrency, privacy, stale fingerprints', async()=>{
+  const env=environment();
+  const sent=await call(env,'/entries',{method:'POST',data:{name:'Forecast participant',picks}});
+  assert.equal(sent.status,200);
+  assert.equal((await call(env,'/admin/forecast-state')).status,401);
+  const input={season:'2026-27',categories:{mvp:{source:{name:'Synthetic test fixture',url:'https://example.org/test',permission:'Tests only',updatedAt:new Date().toISOString()},candidates:players.players.slice(0,3).map((p,i)=>({id:p.id,metrics:{pts:30-i}}))}}};
+  assert.equal((await call(env,'/admin/forecast-input',{token:admin,method:'PUT',data:{input,revision:0}})).status,200);
+  assert.equal((await call(env,'/admin/forecast-input',{token:admin,method:'PUT',data:{input,revision:0}})).status,409);
+  assert.equal((await call(env,'/admin/forecast-input',{token:admin,method:'PUT',data:{input,revision:1}})).status,200);
+  const invalid=structuredClone(input);invalid.categories.mvp.candidates[0].id='not-an-nba-id';
+  assert.equal((await call(env,'/admin/forecast-input',{token:admin,method:'PUT',data:{input:invalid,revision:2}})).status,400);
+  const snapshot=(await call(env,'/admin/forecast-state',{token:admin})).data;
+  const report=simulate({...snapshot,models:buildModels(snapshot.input),iterations:100});
+  assert.equal((await call(env,'/admin/forecasts',{token:admin,method:'POST',data:{fingerprint:'outdated',report}})).status,409);
+  assert.equal((await call(env,'/admin/forecasts',{token:admin,method:'POST',data:{fingerprint:snapshot.fingerprint,report}})).status,200);
+  const hidden=(await call(env,'/forecasts')).data;
+  assert.equal(hidden.locked,true);assert.equal(hidden.report,null);assert.deepEqual(hidden.history,[]);assert.ok(!JSON.stringify(hidden).includes('Forecast participant'));
+  const ended={...env,DEADLINE:'2000-01-01T00:00:00Z'};
+  const visible=(await call(ended,'/forecasts')).data;
+  assert.equal(visible.locked,false);assert.equal(visible.stale,false);assert.equal(visible.report.status,'insufficient');assert.equal(visible.history.length,1);
+  const changedPoints=structuredClone(snapshot.settings.points);changedPoints.mvp.exact[0]=100;
+  env.sqlite.prepare('UPDATE settings SET points = ?, revision = revision + 1 WHERE id = 1').run(JSON.stringify(changedPoints));
+  assert.equal((await call(ended,'/forecasts')).data.stale,true);
+  assert.equal((await call(env,'/admin/forecasts',{token:admin,method:'POST',data:{fingerprint:snapshot.fingerprint,report}})).status,409);
+  assert.equal(env.sqlite.prepare('SELECT count(*) AS n FROM participants').get().n,1);
+  assert.deepEqual(JSON.parse(env.sqlite.prepare('SELECT picks FROM participants').get().picks),picks);
+  env.sqlite.close();
+});
 const picks = Object.fromEntries(awards.map(id => [id, id === 'coy' ? ['coach-BOS', 'coach-BKN', 'coach-NYK'] : players.players.slice(0, 3).map(p => p.id)]));
 picks.conferences = { east_champion:'BOS', west_champion:'LAL', east_mvp:players.players.find(p=>p.team==='BOS').id, west_mvp:players.players.find(p=>p.team==='LAL').id };
 // Executa o SQL real da API num SQLite em memória com a interface do D1.
@@ -15,6 +45,7 @@ function environment() {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec(readFileSync(new URL('../migrations/0001_bolao.sql', import.meta.url), 'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0002_public_entries.sql', import.meta.url), 'utf8'));
+  sqlite.exec(readFileSync(new URL('../migrations/0003_forecasts.sql', import.meta.url), 'utf8'));
   const DB = {
     prepare(sql) {
       const statement = sqlite.prepare(sql); let params = [];

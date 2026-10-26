@@ -28,6 +28,7 @@
       if(session?.token&&!preserve){const own=await request('/me');session.participant=own.participant;state.picks={...defaults().picks,...own.participant.picks};name=own.participant.name;applySettings(own.settings);}
     }
     loading=false;
+    window.dispatchEvent(new Event('bolao-updated'));
   }
   function participantPicks(p){
     return '<div class="participant-picks"><h3>Prêmios individuais <span>Top 3 por categoria</span></h3><div class="ranking-picks-grid">'+AWARDS.map(([id,code,,label])=>
@@ -68,6 +69,8 @@
   // Escolhas apenas na memória; o banco só muda ao clicar em Enviar.
   save=function(){dirty=true;$('#save-state').textContent='Alterações não enviadas';};
   window.bolaoCanBackup=()=>Boolean(session?.admin);
+  window.bolaoForecastRequest=request;
+  window.bolaoForecastIsAdmin=()=>Boolean(session?.admin);
   window.bolaoCanEditConference=field=>!busy&&(session?.admin?field==='results':field==='picks'&&!closed());
   window.bolaoImport=next=>{if(!session?.admin)throw Error('Importar backup está disponível somente para o admin.');return {...next,picks:state.picks};};
   async function perform(action){if(busy)return;busy=true;controls();try{await action();}catch(e){toast(e.message);}finally{busy=false;render();}}

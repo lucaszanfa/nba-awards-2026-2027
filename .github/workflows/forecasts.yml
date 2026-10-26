@@ -1,0 +1,26 @@
+name: Daily championship forecasts
+on:
+  schedule:
+    - cron: '23 10 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: forecasts
+  cancel-in-progress: false
+jobs:
+  update:
+    if: ${{ vars.FORECAST_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/forecasts.test.mjs tests/github-oidc.test.mjs
+      - run: node scripts/update-forecasts.mjs
+        env:
+          FORECAST_API_URL: ${{ vars.FORECAST_API_URL }}
+          FORECAST_SOURCE_URL: ${{ vars.FORECAST_SOURCE_URL }}

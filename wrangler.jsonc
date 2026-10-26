@@ -5,7 +5,11 @@
 	"compatibility_date": "2026-10-08",
 	"vars": {
 		"ALLOWED_ORIGIN": "https://lucaszanfa.github.io",
-		"DEADLINE": "2026-10-20T17:00:00.000Z"
+		"DEADLINE": "2026-10-20T17:00:00.000Z",
+		"FORECAST_GITHUB_REPOSITORY": "lucaszanfa/nba-awards-2026-2027",
+		"FORECAST_GITHUB_REPOSITORY_ID": "1410997068",
+		"FORECAST_GITHUB_OWNER_ID": "164034004",
+		"FORECAST_OIDC_AUDIENCE": "https://nba-awards-bolao.lucaszanfa.workers.dev"
 	},
 	"d1_databases": [
 		{

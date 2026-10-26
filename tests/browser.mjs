@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { resolve, extname, sep } from 'node:path';
 import worker from '../worker/index.mjs';
 const sqlite=new DatabaseSync(':memory:');
-for(const migration of ['0001_bolao.sql','0002_public_entries.sql'])sqlite.exec(readFileSync(new URL('../migrations/'+migration,import.meta.url),'utf8'));
+for(const migration of ['0001_bolao.sql','0002_public_entries.sql','0003_forecasts.sql'])sqlite.exec(readFileSync(new URL('../migrations/'+migration,import.meta.url),'utf8'));
 const admin='test-only-organizer-secret-'.padEnd(64,'a');
 const env={ADMIN_KEY:admin,DEADLINE:'2099-10-20T17:00:00.000Z',DB:{prepare(sql){const s=sqlite.prepare(sql);let p=[];return{bind(...v){p=v;return this;},async first(){return s.get(...p)||null;},async all(){return{results:s.all(...p)};},async run(){return{meta:{changes:s.run(...p).changes}};}};}}};
 const root=resolve('dist');let url;
@@ -18,7 +18,7 @@ const server=createServer(async(req,res)=>{
       res.writeHead(response.status,Object.fromEntries(response.headers));res.end(await response.text());return;
     }
     const path=new URL(req.url,'http://localhost').pathname;
-    res.setHeader('Content-Type',({'.js':'text/javascript','.css':'text/css','.html':'text/html','.png':'image/png','.svg':'image/svg+xml'})[extname(path)]||'text/html');
+    res.setHeader('Content-Type',({'.mjs':'text/javascript','.js':'text/javascript','.css':'text/css','.html':'text/html','.png':'image/png','.svg':'image/svg+xml'})[extname(path)]||'text/html');
     if(path==='/config.js'){res.end('window.BOLAO_CONFIG='+JSON.stringify({apiUrl:url+'/api'})+';');return;}
     const file=resolve(root,'.'+(path==='/'?'/index.html':path));if(!file.startsWith(root+sep))throw Error('Invalid path');res.end(readFileSync(file));
   }catch{res.writeHead(404);res.end();}
@@ -87,6 +87,36 @@ try{
   await other.locator('[data-bolao=refresh]').click();await other.locator('summary').first().waitFor();await other.locator('summary').first().click();
   assert.match(await other.locator('details').textContent(),/MVP/);
   await other.setViewportSize({width:390,height:844});
+  assert.equal(await other.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  await other.locator('[data-view=previsoes]').click();
+  await other.getByRole('heading',{name:'Probabilidade de título',exact:true}).waitFor();
+  await other.getByText(/Dados insuficientes para estimar o campeão geral/).waitFor();
+  assert.equal(await other.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  await other.getByRole('button',{name:'Atualizar previsões',exact:true}).click();
+  await other.getByText(/Dados insuficientes para estimar o campeão geral/).waitFor();
+  // Synthetic fixtures only, written exclusively to the in-memory test database.
+  const fixture={season:'2026-27',categories:{}};
+  const source={name:'Synthetic browser test',url:'https://example.org/test',permission:'Test only',updatedAt:new Date().toISOString()};
+  for(const id of ['mvp','roy','coy','clutch','sixth','mip','dpoy'])fixture.categories[id]={source,candidates:originalPicks[id].map((id,i)=>({id,rookie:true,metrics:{pts:30-i,winPct:.7-i*.1,clutchPts:10-i,ptsImprovement:5-i,defensiveImpact:3-i}}))};
+  for(const [key,value] of Object.entries(originalPicks.conferences))fixture.categories[key]={source,candidates:[{id:value,metrics:{strength:1}}]};
+  await organizer.locator('[data-view=previsoes]').click();
+  await organizer.getByText('Administração das previsões',{exact:true}).click();
+  await organizer.locator('#forecast-import').setInputFiles({name:'test-input.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(fixture))});
+  await organizer.waitForFunction(()=>document.querySelector('[data-forecast=publish]')&&!document.querySelector('[data-forecast=publish]').disabled);
+  assert.equal(sqlite.prepare('SELECT count(*) AS n FROM forecast_history').get().n,1);
+  await organizer.locator('summary').filter({hasText:'Administração das previsões'}).click();
+  await organizer.locator('[data-forecast=publish]').click();
+  await organizer.waitForFunction(()=>!document.querySelector('[data-forecast=publish]').disabled);
+  assert.equal(sqlite.prepare('SELECT count(*) AS n FROM forecast_history').get().n,2);
+  await other.locator('[data-forecast=refresh]').click();
+  await other.locator('[data-person]').first().waitFor();
+  await other.locator('[data-person]').first().click();
+  await other.getByRole('heading',{name:'Resultados que influenciam a chance de título'}).waitFor();
+  await other.locator('[name="roy:1"]').selectOption(originalPicks.roy[0]);
+  await other.getByRole('button',{name:'Calcular cenário',exact:true}).click();
+  await other.getByText(/Cenário hipotético ativo/).waitFor();
+  assert.deepEqual(JSON.parse(sqlite.prepare('SELECT picks FROM participants').get().picks),originalPicks);
+  assert.equal(sqlite.prepare('SELECT count(*) AS n FROM forecast_history').get().n,2);
   assert.equal(await other.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   assert.deepEqual(errors,[]);
   console.log('Chrome: preenchimento pelo nome, envio explícito, ranking, admin, timer, bloqueio e revelação passaram.');
