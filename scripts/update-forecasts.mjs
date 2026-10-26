@@ -46,5 +46,5 @@ export async function update({apiUrl,adminKey,sourceUrl,iterations=100000,fetche
   return report;
 }
 if(process.argv[1]&&new URL(import.meta.url).pathname.endsWith('/scripts/update-forecasts.mjs')&&process.argv[1].replaceAll('\\','/').endsWith('/scripts/update-forecasts.mjs')) {
-  update({apiUrl:process.env.FORECAST_API_URL,adminKey:process.env.FORECAST_ADMIN_KEY,sourceUrl:process.env.FORECAST_SOURCE_URL,iterations:Number(process.env.FORECAST_ITERATIONS||100000)}).catch(()=>{console.error('Atualização não concluída. Verifique configuração, migração e acesso à API.');process.exitCode=1;});
+  update({apiUrl:process.env.FORECAST_API_URL,adminKey:process.env.FORECAST_ADMIN_KEY,sourceUrl:process.env.FORECAST_SOURCE_URL,iterations:Number(process.env.FORECAST_ITERATIONS||100000)}).catch(e=>{console.error('Atualização não concluída: '+e.message);process.exitCode=1;});
 }
