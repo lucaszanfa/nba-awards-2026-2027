@@ -5,6 +5,7 @@ const decode=value=>Uint8Array.from(atob(value.replaceAll('-','+').replaceAll('_
 const json=value=>JSON.parse(new TextDecoder().decode(decode(value)));
 export async function verifyGithubToken(token,policy,{fetcher=fetch,now=Math.floor(Date.now()/1000),onReject=()=>{}}={}) {
   const reject=reason=>{onReject(reason);return false;};
+  let stage='decode';
   try{
     if(!policy.repository||!policy.repositoryId||!policy.ownerId||!policy.audience||token.length>12000)return reject('policy');
     const parts=token.split('.');if(parts.length!==3)return reject('format');
@@ -20,7 +21,9 @@ export async function verifyGithubToken(token,policy,{fetcher=fetch,now=Math.flo
     if(!Number.isFinite(claims.exp)||!Number.isFinite(claims.iat)||claims.exp<=now||claims.exp>now+660||claims.iat>now+30||claims.iat<now-660||(claims.nbf!==undefined&&(!Number.isFinite(claims.nbf)||claims.nbf>now+30)))return reject('lifetime');
     let keys=fetcher===fetch&&keysUntil>now?cachedKeys:null;
     if(!keys){
-      const response=await fetcher(issuer+'/.well-known/jwks',{redirect:'error',signal:AbortSignal.timeout(10000)});
+      stage='jwks-fetch';
+      // workerd supports manual/follow; manual also refuses redirected key endpoints.
+      const response=await fetcher.call(globalThis,issuer+'/.well-known/jwks',{redirect:'manual',signal:AbortSignal.timeout(10000)});
       if(!response.ok)return reject('jwks-fetch');
       keys=(await response.json()).keys;
       if(!Array.isArray(keys))return reject('jwks-format');
@@ -28,10 +31,12 @@ export async function verifyGithubToken(token,policy,{fetcher=fetch,now=Math.flo
     }
     const jwk=keys.find(key=>key.kid===header.kid&&key.kty==='RSA'&&(!key.alg||key.alg==='RS256')&&(!key.use||key.use==='sig'));
     if(!jwk)return reject('key-id');
+    stage='key-import';
     const key=await crypto.subtle.importKey('jwk',jwk,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['verify']);
+    stage='signature';
     const valid=await crypto.subtle.verify('RSASSA-PKCS1-v1_5',key,decode(parts[2]),new TextEncoder().encode(parts[0]+'.'+parts[1]));
     return valid||reject('signature');
-  }catch{return reject('verification');}
+  }catch(e){return reject(stage+'-'+(['TypeError','DataError','OperationError','InvalidCharacterError','SyntaxError','NotSupportedError'].includes(e.name)?e.name:'error'));}
 }
 export async function forecastIdentity(request,env) {
   const token=request.headers.get('authorization')?.match(/^Bearer (\S+)$/)?.[1];

@@ -40,6 +40,8 @@ node scripts/version-assets.mjs
 
 Na ativação de 26/10/2026, a migração `0003_forecasts.sql` foi aplicada no D1 remoto e a API foi publicada. A migração não altera as tabelas dos participantes ou as regras. Um frontend novo precisa da API nova e dessa migração; sem elas, a página de previsões mostra erro de acesso, enquanto os fluxos anteriores continuam usando as rotas antigas.
 
+O recálculo diário está ativo no repositório, com `FORECAST_ENABLED=true` e a URL da API configurada. A [primeira execução validada em produção](https://github.com/lucaszanfa/nba-awards-2026-2027/actions/runs/40413211705) concluiu e persistiu a fotografia no D1. Sem fonte estatística configurada e sem entrada administrativa, o estado é corretamente “dados insuficientes”; não há porcentagens de produção inventadas.
+
 Entre no acesso admin existente, abra Previsões e importe um JSON. A importação valida a estrutura, IDs NBA da base existente, conferências, métricas, fonte e revisão. O cálculo e a publicação fazem parte da operação. Se os dados forem salvos mas a publicação falhar, os palpites permanecem intactos; atualize e publique novamente. Importações concorrentes são recusadas por versão.
 
 Para ativar `.github/workflows/forecasts.yml`, configure no GitHub:
@@ -51,6 +53,8 @@ Para ativar `.github/workflows/forecasts.yml`, configure no GitHub:
 O agendamento é diário às **07h23 de Brasília** (10h23 UTC), sujeito a atrasos do GitHub. Pode ser iniciado por `workflow_dispatch`. Não usa o computador pessoal. Runners padrão em repositórios públicos são gratuitos conforme a [documentação do GitHub](https://docs.github.com/en/actions/concepts/billing-and-usage); repositórios privados têm franquias. O workflow não usa artifacts/cache de Actions nem grava palpites no repositório. Use os planos gratuitos já existentes de Workers/D1 e acompanhe seus limites. Volume de participantes e acessos pode exigir reduzir simulações ou histórico, sem habilitar cobrança automaticamente.
 
 A automação usa [OpenID Connect do GitHub](https://docs.github.com/en/actions/reference/security/oidc), com `id-token: write`. **Não precisa armazenar a chave administrativa nos secrets do GitHub.** O script obtém identidade temporária para a audiência da API e o Worker verifica assinatura RSA com as chaves públicas oficiais, emissor, audiência, expiração, ID do repositório, ID do proprietário, branch `main`, workflow `forecasts.yml` e evento `schedule`/`workflow_dispatch`. A identidade só é aceita nas três rotas administrativas de previsões; não dá acesso a participantes, pontos ou resultados oficiais. As restrições públicas ficam em `wrangler.jsonc`. Para execução manual fora de Actions, `FORECAST_ADMIN_KEY` continua sendo uma opção local; nunca faça commit do valor.
+
+A verificação aceita os formatos de subject legado e imutável, sempre conferindo também os IDs assinados do proprietário e repositório. O formato imutável do GitHub inclui `OWNER@OWNER-ID/REPO@REPO-ID`. A consulta das chaves no Worker usa `redirect: manual` e recusa respostas redirecionadas. Os testes cobrem formato imutável, IDs divergentes, assinaturas adulteradas, tempo de validade e o contexto/opções usados na requisição de chaves.
 
 ## Formato de entrada
 
