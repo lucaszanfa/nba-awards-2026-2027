@@ -2,8 +2,6 @@
 
 Bolão em português para escolher o top 3 de sete prêmios da NBA. A interface é hospedada no GitHub Pages; a API Cloudflare Workers salva os palpites no D1.
 
-**Previsões do Campeonato:** página integrada com Monte Carlo de 100 mil simulações, cenários, corridas dos prêmios, histórico e análise dos participantes. Considera também DPOY e conferências, preservando a pontuação existente. Veja [PREVISOES.md](PREVISOES.md) para migração, ativação diária gratuita, formato de dados, fontes verificadas e limitações. A funcionalidade começa sem dados estatísticos de produção; fontes com restrições de uso não são coletadas automaticamente.
-
 ## Usar
 
 No site publicado, coloque seu nome, preencha as 25 escolhas e clique em **Enviar palpites**. Não há código para participantes nem salvamento automático. Antes de enviar, as escolhas ficam apenas na memória da página. Os palpites enviados podem ser recuperados e alterados no mesmo navegador até o prazo, sem digitar um código.

@@ -1,5 +1,4 @@
 import { validatePicks, validatePoints, score } from './model.mjs';
-import { forecastRoute } from './forecasts.mjs';
 
 class HTTPError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -14,7 +13,7 @@ async function sameSecret(a, b) {
   for (let i = 0; i < x.length; i++) difference |= x.charCodeAt(i) ^ y.charCodeAt(i);
   return difference === 0;
 }
-async function body(request, limit = 16384) {
+async function body(request) {
   if (!request.headers.get('content-type')?.startsWith('application/json')) throw new HTTPError(415, 'Envie JSON.');
   const reader = request.body?.getReader();
   if (!reader) throw new HTTPError(400, 'Requisição vazia.');
@@ -23,7 +22,7 @@ async function body(request, limit = 16384) {
     const { done, value } = await reader.read();
     if (done) break;
     size += value.length;
-    if (size > limit) { await reader.cancel(); throw new HTTPError(413, 'Requisição muito grande.'); }
+    if (size > 16384) { await reader.cancel(); throw new HTTPError(413, 'Requisição muito grande.'); }
     chunks.push(value);
   }
   const bytes = new Uint8Array(size); let offset = 0;
@@ -57,8 +56,6 @@ async function auth(request, env, admin = false) {
   return user;
 }
 async function route(request, env) {
-  const forecast = await forecastRoute(request, env, {auth, settings, body, hash});
-  if (forecast !== undefined) return forecast;
   const path = new URL(request.url).pathname, method = request.method;
   if (path === '/health' && method === 'GET') {
     await settings(env.DB);

@@ -49,4 +49,10 @@ export function validatePoints(input) {
   }
   return clean;
 }
-export { score } from '../dist/forecast-engine.mjs';
+export function score(picks, results, points) {
+  if (!picks) return 0;
+  return awards.reduce((total, id) => total + (picks[id] ?? []).reduce((sum, value, i) => {
+    if (!value) return sum;
+    return sum + (results[id]?.[i] === value ? points[id].exact[i] : results[id]?.includes(value) ? points[id].wrong : 0);
+  }, 0), 0) + conferenceFields.reduce((total, key) => total + (picks.conferences?.[key] && picks.conferences[key] === results.conferences?.[key] ? points.conferences?.[key] ?? 10 : 0), 0);
+}
